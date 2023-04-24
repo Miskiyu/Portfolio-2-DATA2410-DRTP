@@ -1,3 +1,5 @@
+#The following code is taken from Islam, S with permission.  
+
 '''
     #Utility functions: 1) to create a packet of 1472 bytes with header (12 bytes) (sequence number, acknowledgement number,
     #flags and receiver window) and applicaton data (1460 bytes), and 2) to parse
@@ -108,7 +110,3 @@ print(f'seq={seq}, ack={ack}, flags={flags}, receiver-window={win}')
 #now let's parse the flag field
 syn, ack, fin = parse_flags(flags)
 print (f'syn_flag = {syn}, fin_flag={fin}, and ack_flag={ack}')
-
-
-
-
