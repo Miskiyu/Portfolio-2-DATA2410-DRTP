@@ -1,7 +1,6 @@
 #I denne filen skal vi ha nødvendig kode for server og client + DRTP (men ikke header, den er i en egen fil)
 #Flags:
 #-f -> filename?
-#-m -> mode (hvilken metode i DRTP for server)
 #-r -> hvilken metode client skal sende på i DRTP
 #-t -> Forskjell mellom client og server: Skipack er servermetode, loss er clientmetode ?
 
@@ -156,6 +155,11 @@ parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or defa
 #client argument code
 parser.add_argument("-c", "--client", help="try to type '-c", action="store_true")
 parser.add_argument("-I", "--serverip", help="Write the IP-address of the server to connect", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
+#Nye argumenter som brukes i denne portifolioen:
+parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=str)
+parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
+parser.add_argument("-t", "--testcase", help="Type in if you want to set a type of testcase", type=str, choices=['loss', 'skipack'])
+
 args = parser.parse_args()
 
 serverip = args.serverip
