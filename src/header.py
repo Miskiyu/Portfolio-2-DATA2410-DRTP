@@ -17,7 +17,7 @@ from struct import *
 header_format = '!IIHH'
 
 #print the header size: total = 12
-print (f'size of the header = {calcsize(header_format)}')
+# print (f'size of the header = {calcsize(header_format)}')
 
 def create_packet(seq, ack, flags, win, data):
     #creates a packet with header information and application data
@@ -30,7 +30,7 @@ def create_packet(seq, ack, flags, win, data):
     #once we create a header, we add the application data to create a packet
     #of 1472 bytes
     packet = header + data
-    print (f'packet containing header + data of size {len(packet)}') #just to show the length of the packet
+#    print (f'packet containing header + data of size {len(packet)}') #just to show the length of the packet
     return packet
 
 def parse_header(header):
@@ -50,10 +50,10 @@ def parse_flags(flags):
     return syn, ack, fin
 
 #now let's create a packet with sequence number 1
-print ('\n\ncreating a packet')
+#print ('\n\ncreating a packet')
 
 data = b'0' * 1460
-print (f'app data for size ={len(data)}')
+#print (f'app data for size ={len(data)}')
 
 sequence_number = 1
 acknowledgment_number = 0
@@ -73,7 +73,7 @@ print(len(header_from_msg))
 #which unpacks the values based on the header_format that 
 #we specified
 seq, ack, flags, win = parse_header (header_from_msg)
-print(f'seq={seq}, ack={ack}, flags={flags}, recevier-window={win}')
+#print(f'seq={seq}, ack={ack}, flags={flags}, recevier-window={win}')
 
 #let's extract the data_from_msg that holds
 #the application data of 1460 bytes
@@ -86,8 +86,8 @@ print (len(data_from_msg))
 #an acknowledgment packet from the receiver should have no data
 #only the header with acknowledgment number, ack_flag=1, win=6400
 data = b'' 
-print('\n\nCreating an acknowledgment packet:')
-print (f'this is an empty packet with no data ={len(data)}')
+#print('\n\nCreating an acknowledgment packet:')
+#print (f'this is an empty packet with no data ={len(data)}')
 
 sequence_number = 0
 acknowledgment_number = 1   #an ack for the last sequnce
@@ -99,12 +99,12 @@ window = 0 # window value should always be sent from the receiver-side
 flags = 4 
 
 msg = create_packet(sequence_number, acknowledgment_number, flags, window, data)
-print (f'this is an acknowledgment packet of header size={len(msg)}')
+#print (f'this is an acknowledgment packet of header size={len(msg)}')
 
 #let's parse the header
 seq, ack, flags, win = parse_header (msg) #it's an ack message with only the header
-print(f'seq={seq}, ack={ack}, flags={flags}, receiver-window={win}')
+#print(f'seq={seq}, ack={ack}, flags={flags}, receiver-window={win}')
 
 #now let's parse the flag field
 syn, ack, fin = parse_flags(flags)
-print (f'syn_flag = {syn}, fin_flag={fin}, and ack_flag={ack}')
+#print (f'syn_flag = {syn}, fin_flag={fin}, and ack_flag={ack}')

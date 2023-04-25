@@ -5,48 +5,72 @@
 #-r -> hvilken metode client skal sende på i DRTP
 #-t -> Forskjell mellom client og server: Skipack er servermetode, loss er clientmetode ?
 
-
-
 import header
 import argparse
 import socket
 import sys
 import re #Importing regex to check ip-adress for errors
 
-socket.settimeout(500) #The default timeout for any socket operation is 500 ms.
+socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
-def handshakeServer():
-    modifiedMessage, (serverip, port) = clientSocket.recvfrom(2048)
-    modifiedMessage = modifiedMessage.decode()
-    
+def handshakeServer(serverSocket, IP, port):
 
-
-def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
+    message, (serverip, port) = serverSocket.recvfrom(2048)
     
     sequence_number = 0
     acknowledgment_number = 0
     window = 64000
+    data = b'0' * 2
+
+    seq, ack, flags, win = header.parse_header(message)
+    data_from_msg = message[:12]
+    seq, acknum, flags, win = header.parse_header(data_from_msg) #it's an ack message with only the header
+    syn, ack, fin = header.parse_flags(flags)
+    if seq == 0 and acknum == 0 and flags == 8:
+        print("First syn recieved successfully at server from client!")
+        flags = 12
+        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+        serverSocket.sendto(msg, (serverip, port))
+    else:
+        sys.exit()
+    #Send stuff here
+
+    print("We managed to reach line 38 in the code!")    
+    
+    if seq == 0 and acknum == 0 and flags == 4:
+        print("Second syn recieved successfully at server from client!")
+        return
+    else:
+        sys.exit()   
+    
+def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
+    sequence_number = 0
+    acknowledgment_number = 0
+    window = 64000
     flags = 8
-    data = 0
+    data = b'0' * 0
 
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
     clientSocket.sendto(msg, (serverip, port))
     
-    modifiedMessage, (serverip, port) = clientSocket.recvfrom(2048)
-    modifiedMessage = modifiedMessage.decode()
+    modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+
     
-    data_from_msg = modifiedMessage[12:]
+    data_from_msg = modifiedMessage[:12]
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
     syn, ack, fin = header.parse_flags(flags)
 
-    if syn and ack:
+    if syn and ack != 0:
+        print("The ack from Server was recieved at Client!!")
         flags= 4
-       
         msg = header.create_packet(sequence_number,acknowledgment_number,flags,window,data)
         clientSocket.sendto(msg, (serverip, port))
-        transmittAndListen(clientSocket, fileForTransfer, method)
-
-def transmittAndListen(msg):
+        transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTransfer, method)
+    else:
+        print('Error: Did not receive SYN-ACK packet')
+        sys.exit()
+        
+def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTransfer, method):
     print("Her skal vi sende og lytte alt etter metode som ble satt i terminalen")
     #Message to server from client: 
     data = b'0' * 1460
@@ -58,21 +82,17 @@ def transmittAndListen(msg):
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
 
     #Encoding packet and sending it to server ip and port
-    clientSocket.sendto(msg, (serverip, port))
+    clientSocket.sendto(msg, serverConnection)
     
-    modifiedMessage, (serverip, port) = clientSocket.recvfrom(2048)
-    modifiedMessage = modifiedMessage.decode()
+    print("We managed to reach this points. This is the clientsocket:")
+    print(clientSocket)
+    modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+    print("This point, however, is out of our reach")
     
     data_from_msg = modifiedMessage[12:]
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
     print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
     syn, ack, fin = header.parse_flags(flags)
-
-    if syn and ack:
-        
-        flags = 4
-        msg = header.create_packet(flags,window,data)
-        return
 
     clientSocket.close()
 
@@ -99,12 +119,11 @@ def check_port(port): #Code to check that the port is written is valid. Inspired
 
 def createServer(ip, port):
     print("Her opprettes server:")
-    handshakeServer()
-
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     serverSocket.bind((ip, port))
     print('The server is ready to receive')
-
+    handshakeServer(serverSocket, ip, port)
+    
     while True:
         message, clientAddress = serverSocket.recvfrom(2048)
         message = message.decode()
@@ -117,19 +136,20 @@ def createServer(ip, port):
         acknowledgment_number = 0
         window = 0 
         flags = 4
-
+        
         msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
         serverSocket.sendto(msg.encode(), clientAddress)
 
         seq, acknum, flags, win = header.parse_header (msg) #it's an ack message with only the header
         print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}') #TODO delete this
 
+
+
 def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     handshakeClient(clientSocket, serverip, port, method, fileForTransfer) #Sending a packet with the syn flag to the server, if an ack is recieved transmission of data starts.
     
-
 #Defining the argumentParser
 parser = argparse.ArgumentParser(description='The arguments used when calling the program')
 #server argument code
@@ -140,7 +160,6 @@ parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or defa
 #client argument code
 parser.add_argument("-c", "--client", help="try to type '-c", action="store_true")
 parser.add_argument("-I", "--serverip", help="Write the IP-address of the server to connect", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
-
 args = parser.parse_args()
 
 serverip = args.serverip
