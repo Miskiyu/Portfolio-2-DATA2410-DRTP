@@ -26,6 +26,8 @@ def handshakeServer(serverSocket, IP, port):
     data_from_msg = message[:12]
     seq, acknum, flags, win = header.parse_header(data_from_msg) #it's an ack message with only the header
     syn, ack, fin = header.parse_flags(flags)
+
+    print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")
     if seq == 0 and acknum == 0 and flags == 8:
         print("First syn recieved successfully at server from client!")
         flags = 12
@@ -35,8 +37,8 @@ def handshakeServer(serverSocket, IP, port):
         sys.exit()
     #Send stuff here
 
-    print("We managed to reach line 38 in the code!")    
-    
+    print("We managed to reach line 38 in the code!")
+    print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")    
     if seq == 0 and acknum == 0 and flags == 4:
         print("Second syn recieved successfully at server from client!")
         return
@@ -63,6 +65,7 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
     if syn and ack != 0:
         print("The ack from Server was recieved at Client!!")
         flags= 4
+        print(f"Dette er flags fra client: {flags}")
         msg = header.create_packet(sequence_number,acknowledgment_number,flags,window,data)
         clientSocket.sendto(msg, (serverip, port))
         transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTransfer, method)
