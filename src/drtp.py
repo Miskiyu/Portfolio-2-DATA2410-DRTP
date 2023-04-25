@@ -14,7 +14,6 @@ import re #Importing regex to check ip-adress for errors
 socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
 def handshakeServer(serverSocket, IP, port):
-
     message, (serverip, port) = serverSocket.recvfrom(2048)
     
     sequence_number = 0
@@ -33,17 +32,12 @@ def handshakeServer(serverSocket, IP, port):
         flags = 12
         msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
         serverSocket.sendto(msg, (serverip, port))
-    else:
-        sys.exit()
-    #Send stuff here
 
     print("We managed to reach line 38 in the code!")
     print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")    
     if seq == 0 and acknum == 0 and flags == 4:
         print("Second syn recieved successfully at server from client!")
         return
-    else:
-        sys.exit()   
     
 def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
     sequence_number = 0
@@ -62,6 +56,7 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
     syn, ack, fin = header.parse_flags(flags)
 
+    print(f"Dette er syn og ack:  {syn}, {ack}")
     if syn and ack != 0:
         print("The ack from Server was recieved at Client!!")
         flags= 4
@@ -92,7 +87,7 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
     modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
     print("This point, however, is out of our reach")
     
-    data_from_msg = modifiedMessage[12:]
+    data_from_msg = modifiedMessage[:12]
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
     print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
     syn, ack, fin = header.parse_flags(flags)
@@ -129,8 +124,8 @@ def createServer(ip, port):
     
     while True:
         message, clientAddress = serverSocket.recvfrom(2048)
-        message = message.decode()
-        data_from_msg = message[12:]
+    
+        data_from_msg = message[:12]
         Recieved_header = header.parse_header(data_from_msg)
         print(Recieved_header)
         data = b''
@@ -141,7 +136,7 @@ def createServer(ip, port):
         flags = 4
         
         msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-        serverSocket.sendto(msg.encode(), clientAddress)
+        serverSocket.sendto(msg, clientAddress)
 
         seq, acknum, flags, win = header.parse_header (msg) #it's an ack message with only the header
         print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}') #TODO delete this
