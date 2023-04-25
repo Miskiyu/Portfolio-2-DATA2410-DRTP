@@ -143,8 +143,6 @@ def createServer(ip, port):
         seq, acknum, flags, win = header.parse_header (msg) #it's an ack message with only the header
         print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}') #TODO delete this
 
-
-
 def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
