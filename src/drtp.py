@@ -5,19 +5,7 @@
 #-r -> hvilken metode client skal sende på i DRTP
 #-t -> Forskjell mellom client og server: Skipack er servermetode, loss er clientmetode ?
 
-'''
-udp server:
-from socket import *
-serverPort = 12000
-serverSocket = socket(AF_INET, SOCK_DGRAM)
-serverSocket.bind(('', serverPort))
-print ('The server is ready to receive')
-while True:
-    message, clientAddress = serverSocket.recvfrom(2048)
-    modifiedMessage = message.decode().upper()
-    serverSocket.sendto(modifiedMessage.encode(),clientAddress)
-s
-'''
+
 
 import header
 import argparse
@@ -60,6 +48,33 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
 
 def transmittAndListen(msg):
     print("Her skal vi sende og lytte alt etter metode som ble satt i terminalen")
+    #Message to server from client: 
+    data = b'0' * 1460
+    #print (f'app data for size ={len(data)}') TODO delete this
+    sequence_number = 1
+    acknowledgment_number = 0
+    window = 0 
+    flags = 0
+    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+
+    #Encoding packet and sending it to server ip and port
+    clientSocket.sendto(msg, (serverip, port))
+    
+    modifiedMessage, (serverip, port) = clientSocket.recvfrom(2048)
+    modifiedMessage = modifiedMessage.decode()
+    
+    data_from_msg = modifiedMessage[12:]
+    seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+    print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
+    syn, ack, fin = header.parse_flags(flags)
+
+    if syn and ack:
+        
+        flags = 4
+        msg = header.create_packet(flags,window,data)
+        return
+
+    clientSocket.close()
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
 
