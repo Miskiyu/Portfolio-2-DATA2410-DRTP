@@ -9,6 +9,7 @@ import argparse
 import socket
 import sys
 import re #Importing regex to check ip-adress for errors
+import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 
 socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
@@ -32,7 +33,7 @@ def handshakeServer(serverSocket, IP, port):
         msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
         serverSocket.sendto(msg, (serverip, port))
 
-    print("We managed to reach line 38 in the code!")
+    print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
     print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")    
     if seq == 0 and acknum == 0 and flags == 4:
         print("Second syn recieved successfully at server from client!")
@@ -84,7 +85,6 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
     print("We managed to reach this points. This is the clientsocket:")
     print(clientSocket)
     modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
-    print("This point, however, is out of our reach")
     
     data_from_msg = modifiedMessage[:12]
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
@@ -159,7 +159,6 @@ parser.add_argument("-I", "--serverip", help="Write the IP-address of the server
 parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=str)
 parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
 parser.add_argument("-t", "--testcase", help="Type in if you want to set a type of testcase", type=str, choices=['loss', 'skipack'])
-
 args = parser.parse_args()
 
 serverip = args.serverip
