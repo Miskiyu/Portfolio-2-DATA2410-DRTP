@@ -11,8 +11,6 @@ import sys
 import re #Importing regex to check ip-adress for errors
 import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 
-socket.timeout(500) #The default timeout for any socket operation is 500 ms.
-
 def handshakeServer(serverSocket, IP, port):
     message, (serverip, port) = serverSocket.recvfrom(2048)
     
@@ -21,10 +19,8 @@ def handshakeServer(serverSocket, IP, port):
     window = 64000
     data = b'0' * 2
 
-    seq, ack, flags, win = header.parse_header(message)
     data_from_msg = message[:12]
     seq, acknum, flags, win = header.parse_header(data_from_msg) #it's an ack message with only the header
-    syn, ack, fin = header.parse_flags(flags)
 
     print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")
     if seq == 0 and acknum == 0 and flags == 8:
@@ -120,25 +116,40 @@ def createServer(ip, port):
     serverSocket.bind((ip, port))
     print('The server is ready to receive')
     handshakeServer(serverSocket, ip, port)
+    listOfData = []
     
     while True:
         message, clientAddress = serverSocket.recvfrom(2048)
-    
-        data_from_msg = message[:12]
-        Recieved_header = header.parse_header(data_from_msg)
-        print(Recieved_header)
-        data = b''
-
-        sequence_number = 0
-        acknowledgment_number = 0
-        window = 0 
-        flags = 4
+        header_from_msg = message[:12]
+        seq, acknum, flags, win = header.parse_header(header_from_msg)
+        syn, ack, fin = header.parse_flags(flags)
         
-        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-        serverSocket.sendto(msg, clientAddress)
+        #Staten der vi legger inn data etterhvert som det kommer
+        if(fin == 0 and ack == 0):
+            listOfData.append((seq ,message[12:]))
 
-        seq, acknum, flags, win = header.parse_header (msg) #it's an ack message with only the header
-        print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}') #TODO delete this
+            data = b''
+            sequence_number = 0
+            acknowledgment_number = 0
+            window = 0 
+            flags = 4
+            
+            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+            serverSocket.sendto(msg, clientAddress)
+        #Staten der vi er ferdige med å motta data, og vil avslutte
+        else:
+            if seq == 0 and acknum == 0 and fin != 0:
+                print("First FIN recieved successfully at server from client!")
+                flags = 6
+                msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                serverSocket.sendto(msg, (serverip, port))
+
+            if seq == 0 and acknum == 0 and ack != 0:
+                print("Second FIN recieved successfully at server from client!")
+                #Her må vi liste ut alt dataen vi har fått inn ...!
+                break
+
+
 
 def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
@@ -159,6 +170,7 @@ parser.add_argument("-I", "--serverip", help="Write the IP-address of the server
 parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=str)
 parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
 parser.add_argument("-t", "--testcase", help="Type in if you want to set a type of testcase", type=str, choices=['loss', 'skipack'])
+
 args = parser.parse_args()
 
 serverip = args.serverip
@@ -166,6 +178,8 @@ bind = args.bind
 port = args.port
 method = "Metode som hentes ut av argparse"
 fileForTransfer = "Fil som skal sendes"
+
+socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
 if args.client == True or args.server == True:
     if(args.client == True and args.server == True):
@@ -181,4 +195,3 @@ if args.client == True or args.server == True:
 else:
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
-#UDP client
