@@ -11,6 +11,9 @@ import sys
 import re #Importing regex to check ip-adress for errors
 import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 
+socket.timeout(500) #The default timeout for any socket operation is 500 ms.
+
+
 def handshakeServer(serverSocket, IP, port):
     message, (serverip, port) = serverSocket.recvfrom(2048)
     
@@ -20,7 +23,7 @@ def handshakeServer(serverSocket, IP, port):
     data = b'0' * 2
 
     data_from_msg = message[:12]
-    seq, acknum, flags, win = header.parse_header(data_from_msg) #it's an ack message with only the header
+    seq, acknum, flags, win = header.parse_header(data_from_msg)
 
     print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")
     if seq == 0 and acknum == 0 and flags == 8:
@@ -66,27 +69,55 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
         
 def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTransfer, method):
     print("Her skal vi sende og lytte alt etter metode som ble satt i terminalen")
-    #Message to server from client: 
-    data = b'0' * 1460
-    #print (f'app data for size ={len(data)}') TODO delete this
-    sequence_number = 1
-    acknowledgment_number = 0
-    window = 0 
-    flags = 0
-    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-
-    #Encoding packet and sending it to server ip and port
-    clientSocket.sendto(msg, serverConnection)
+    fileForTransfer = 1460
+    while fileForTransfer > 0:
+        #Message to server from client: 
+        data = b'0' * 1460
+        sequence_number = 1
+        acknowledgment_number = 0
+        window = 0 
+        flags = 0
+        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+        #Encoding packet and sending it to server ip and port
+        clientSocket.sendto(msg, serverConnection)
+        
+        modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+        data_from_msg = modifiedMessage[:12]
+        seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+        print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
+        syn, ack, fin = header.parse_flags(flags)
+        #Cutting of the amount of data sent
+        fileForTransfer = fileForTransfer - 1460
     
-    print("We managed to reach this points. This is the clientsocket:")
-    print(clientSocket)
-    modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
-    
-    data_from_msg = modifiedMessage[:12]
-    seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
-    print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
-    syn, ack, fin = header.parse_flags(flags)
+    #Going into Finish-mode:
+    print("Going into Finish-mode at client")
+    while True:
+        print("Kommer inn i while-Loop")
+        data = b'0' * 0
+        sequence_number = 0
+        acknowledgment_number = 0
+        window = 0 
+        flags = 2
+        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+        #Encoding packet and sending it to server ip and port
+        clientSocket.sendto(msg, serverConnection)
+        print("Har sendt meldingen til server")
 
+        modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+        print("Vi har motatt melding fra server")
+        data_from_msg = modifiedMessage[:12]
+        seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+        print(f'seq={seq}, ack={acknum}, flags={flags}, receiver-window={win}')
+        syn, ack, fin = header.parse_flags(flags)
+        print("Kommer til if-setningen")
+        if(fin == 2 and ack == 4):
+            flags = 4
+            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+            clientSocket.sendto(msg, serverConnection)
+            #We are done -> finish
+            print("We are done at client side, finishing")
+            break
+    print("Closing socket")
     clientSocket.close()
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
@@ -125,7 +156,9 @@ def createServer(ip, port):
         syn, ack, fin = header.parse_flags(flags)
         
         #Staten der vi legger inn data etterhvert som det kommer
-        if(fin == 0 and ack == 0):
+        print(f"Dette er flags: {flags}")
+        print(f"Dette er ack og fin: {ack}, {fin}")
+        if(flags == 0):
             listOfData.append((seq ,message[12:]))
 
             data = b''
@@ -137,14 +170,17 @@ def createServer(ip, port):
             msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
             serverSocket.sendto(msg, clientAddress)
         #Staten der vi er ferdige med å motta data, og vil avslutte
-        else:
-            if seq == 0 and acknum == 0 and fin != 0:
+        elif(flags != 0 and listOfData):
+            if seq == 0 and acknum == 0 and fin == 2:
                 print("First FIN recieved successfully at server from client!")
+                data = b''
+                sequence_number = 0
+                acknowledgment_number = 0
+                window = 0 
                 flags = 6
                 msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                serverSocket.sendto(msg, (serverip, port))
-
-            if seq == 0 and acknum == 0 and ack != 0:
+                serverSocket.sendto(msg, clientAddress)
+            elif seq == 0 and acknum == 0 and ack == 4:
                 print("Second FIN recieved successfully at server from client!")
                 #Her må vi liste ut alt dataen vi har fått inn ...!
                 break
@@ -179,7 +215,6 @@ port = args.port
 method = "Metode som hentes ut av argparse"
 fileForTransfer = "Fil som skal sendes"
 
-socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
 if args.client == True or args.server == True:
     if(args.client == True and args.server == True):
