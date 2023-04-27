@@ -157,50 +157,72 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     print("Go-Back-N reliability method")
     listOfData = PackFile(fileForTransfer)
     i = 0
+    print(f" lengde av listofData: {len(listOfData)}")
     while i < len(listOfData):
+        dataTransfer = []
+        ackList = []
+
         if(len(listOfData) - i >= 5):
             k = 0
-            dataTransfer = []
-            ackList = []
-            while k < 5:
-                dataTransfer[k] = listOfData[i + k]
+            while k < 5 :
+                dataTransfer.append(listOfData[i + k])
                 k+=1
 
-            w = 0
-            sumSeq = 0
-            while len(ackList) <= 5:
-                flags = 0
-                packet= header.create_packet(seq_num + w, 0, flags, window, dataTransfer[w])
-                #Oppdaterer sumSeq som vi bruker for å sjekke om vi fikk alle acks som ble sendt i denne omgang til 
-                sumSeq += seq_num + w
-
-                if(w < 5): 
-                    try:   
-                        clientSocket.sendto(packet, serverConnection)
-                        # clientSocket.settimeout(0.5)
-                        ack, serverConnection =  clientSocket.recvfrom(12)
-                        header_from_msg = ack[:12]
-                        seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
-                        syn, ack, fin = header.parse_flags(flags)
-                        
-                        ackList.append(acknum)
-                        w += 1
-                    except socket.timeout:
-                        print("Timeout, resending packet...")
-            #Vi sjekker om antall acks og nummeret deres stemmer overens med seqnummer av pakker sendt til server
-            sjekk = False
-            if sum(ackList) == sumSeq:
-                sjekk = True
-
-            if(sjekk):
-                seq_num += 5
-                i += 5
-        else:
+        else: #If there's less than 5 packets left to send, we send those packets, and a few extra packets so that the total amount of packets sent is 5. 
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
+            antallTommePakker = len(listOfData) - seq_num
+            k = seq_num
+
+            while k < len(listOfData):
+                dataTransfer.append(listOfData[i + k])
+                k += 1
+            
+            for i in range(antallTommePakker):
+                data = b'0' * 0
+                dataTransfer.append(data)
+
+        w = 0
+        sumSeq = 0
+        while len(ackList) <= 5:
+            flags = 0
+            packet= header.create_packet(seq_num + w, 0, flags, window, dataTransfer[w])
+            #Oppdaterer sumSeq som vi bruker for å sjekke om vi fikk alle acks som ble sendt i denne omgang til 
+            sumSeq += seq_num + w
+
+            if(w < 5): 
+                try:   
+                    clientSocket.sendto(packet, serverConnection)
+                    # clientSocket.settimeout(0.5)
+                    ack, serverConnection =  clientSocket.recvfrom(12)
+                    header_from_msg = ack[:12]
+                    seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+                    syn, ack, fin = header.parse_flags(flags)
+                    
+                    ackList.append(acknum)
+                    w += 1
+                except socket.timeout:
+                    print("Timeout, resending packet...")
+        #Vi sjekker om antall acks og nummeret deres stemmer overens med seqnummer av pakker sendt til server
+        sjekk = False
+        if sum(ackList) == sumSeq:
+            sjekk = True
+
+        if(sjekk):
+            seq_num += 5
+            i += 5
+            
     return seq_num
 
 def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
     listOfData = PackFile(fileForTransfer)
+    window_size = 5
+    buffer = [] #buffer to hold received packet that are out of order
+    forventetSeq = 0 #
+    i = 0
+    while i < len(listOfData):
+        if len(listOfData) - i >= window_size:
+            return
+            
     print("Inne")
 
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
@@ -261,8 +283,8 @@ def createServer(ip, port, method):
             if(flags == 0):
                 if(seq == ackNum):
                     listOfData.append((seq ,message[12:]))
-                
-                    data = b'' #TODO ?
+                    
+                    data = b''
                     sequence_number = 0
                     acknowledgment_number = ackNum
                     flags = 4
@@ -298,18 +320,49 @@ def createServer(ip, port, method):
     elif(method == "GBN"):
         print("Her kommer GBN koden")
         bufferData = []
+        checkSeqNum = seqNum
         while True:
-            for i in range(5):
-                message, clientAddress = serverSocket.recvfrom(1472)
-                header_from_msg = message[:12]
-                seq, acknum, flags, win = header.parse_header(header_from_msg)
-                syn, ack, fin = header.parse_flags(flags)
-                if seqNum == seq:
+            message, clientAddress = serverSocket.recvfrom(1472)
+            header_from_msg = message[:12]
+            seq, acknum, flags, win = header.parse_header(header_from_msg)
+            syn, ack, fin = header.parse_flags(flags)
+            if(flags == 0):
+                if checkSeqNum == seq:
                     bufferData.append(message[12:])
-                if i == 5:
-                    seqNum += i*5-(5+4+3+2+1)
-            
-            print("This!") 
+                    checkSeqNum += 1
+                    if(len(bufferData) == 5):
+                        for i in bufferData:
+                            listOfData.append(i)
+                        bufferData.clear
+                        seqNum += 5
+                        checkSeqNum = seqNum
+                        for i in range(5):
+                            data = b''
+                            sequence_number = 0
+                            acknowledgment_number = ackNum
+                            flags = 4
+                            
+                            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                            serverSocket.sendto(msg, clientAddress)
+                            ackNum+=1
+                else:
+                    checkSeqNum = seqNum
+                    bufferData.clear()
+            else:
+                print("Kommer inn i avslutningsfasen i server for GBN metode")
+                if fin == 2:
+                    print("First FIN recieved successfully at server from client!")
+                    data = b''
+                    sequence_number = 0
+                    acknowledgment_number = 0
+                    flags = 6
+                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                    serverSocket.sendto(msg, clientAddress)
+                elif ack == 4:
+                    print("Second FIN recieved successfully at server from client!")
+                    #Her må vi liste ut alt dataen vi har fått inn ...!
+                    break
+                                    
     else:
         print("Her kommer SR koden")
 
