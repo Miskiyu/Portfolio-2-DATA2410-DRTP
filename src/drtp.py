@@ -82,10 +82,10 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
     elif(method == "GBN"):
         seqNum = (int) (goBackN(clientSocket, fileForTransfer, serverConnection, seqNum))
     else:
-        print("Here comes SR method")
+        seqNum=(int) (selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seqNum))
 
     #Going into Finish-mode:
-    print("Going into Finish-mode at client")
+    print("Going into Finish-mode at client for SR method")
     while True:
         print("Kommer inn i while-Loop")
         data = b'0' * 0
@@ -225,9 +225,9 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
     allSentPacketNumbers = []
 
     while i < len(listOfData):
-        print("Nå er vi inne i whileløkken som skal gå til når vi er tom for data å sende")
+        print("Nå er vi inne i whileløkken ")
         dataTransfer = []
-        if(allSentPacketNumbers.count() == 0):
+        if(len(allSentPacketNumbers) == 0):
             if(len(listOfData) - i >= 5):
                 for k in range(5):
                     dataTransfer.append(listOfData[i + k])
@@ -267,12 +267,16 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
 
             print(sum(ackList))
             
-            for i in ackList:
-                for j in allSentPacketNumbers:  #Den kan bli ut av range hvis vi popper
-                    if ackList[i]==allSentPacketNumbers[j]:
-                        allSentPacketNumbers.pop(j)
+            for i in ackList:    #Metoden vi hadde før funket ikke, det ble index out of bounds.
+                for j in allSentPacketNumbers:
+                    if i == j:
+                        allSentPacketNumbers.remove(i)  #Alt blir fjernert fordi alt blir sendt
+           
+
+          
+
             
-            if(allSentPacketNumbers.count == 0):
+            if(len(allSentPacketNumbers) == 0):
                 seq_num += 5
                 i += 5
         else:
@@ -285,7 +289,7 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
             for b in indexForTransfer:
                 dataTransfer.append(listOfData[b]) #Finner dataen vi må sende på ny til server
             
-            for j in len(dataTransfer):
+            for j in  range(len(dataTransfer)):
                 flags = 0
                 packet= header.create_packet(allSentPacketNumbers[j], 0, flags, window, dataTransfer[j])
                 try:   
@@ -294,7 +298,7 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
                         print("Timeout, resending packets...") 
         
             clientSocket.settimeout(0.5)
-            for j in len(dataTransfer):
+            for j in range(len(dataTransfer)):
                 try:
                     ack, serverConnection =  clientSocket.recvfrom(12)
                     header_from_msg = ack[:12]
@@ -311,7 +315,7 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
                     if ackList[i]==allSentPacketNumbers[j]:
                         allSentPacketNumbers.pop(j)
             
-            if(allSentPacketNumbers.count == 0):
+            if(len(allSentPacketNumbers) == 0):
                 seq_num += 5
                 i += 5
                 
@@ -466,6 +470,60 @@ def createServer(ip, port, method):
                                     
     else:
         print("Her kommer SR koden")
+        bufferData = []
+        checkSeqNum = seqNum
+        while True:
+            message, clientAddress = serverSocket.recvfrom(1472)
+            header_from_msg = message[:12]
+            seq, acknum, flags, win = header.parse_header(header_from_msg)
+            syn, ack, fin = header.parse_flags(flags)
+            if(flags == 0):
+                print("Henter ut melding der flagg er 0")
+                print(f"chcechSeqNum: {checkSeqNum}")
+                print(f"seq: {seq}")
+                if checkSeqNum == seq:
+                    bufferData.append(message[12:])
+                    checkSeqNum += 1
+                    if(len(bufferData) == 5):
+                        print("Bufferdata er lik 5")
+                        for i in bufferData:
+                            listOfData.append(i)
+                        bufferData.clear()
+                        seqNum += 5
+                        checkSeqNum = seqNum
+                        for i in range(5): #Sending the 5 acks to the client
+                            print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
+                            data = b''
+                            sequence_number = 0
+                            acknowledgment_number = ackNum
+                            flags = 4
+                            
+                            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                            serverSocket.sendto(msg, clientAddress)
+                            ackNum+=1
+                else: #Går inn i else hvis det er feil rekkefølge og sender på nytt
+                    print("Kommer inn i else i SR,det vil si at de ikke ble send i riktig rekkefølge ")
+                    flags = 4
+                    ackNum= checkSeqNum
+                    sequence_number = seqNum
+                    acknowledgment_number = ackNum
+                    data = b''
+                    packet  = header.create_packet(sequence_number, acknowledgment_number,flags,window,data)
+                    serverSocket.sendto(packet,clientAddress)
+            else:
+                print("Kommer inn i avslutningsfasen i server for SR metode")
+                if fin == 2:
+                    print("First FIN recieved successfully at server from client!")
+                    data = b''
+                    sequence_number = 0
+                    acknowledgment_number = 0
+                    flags = 6
+                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                    serverSocket.sendto(msg, clientAddress)
+                elif ack == 4:
+                    print("Second FIN recieved successfully at server from client!")
+                    #Her må vi liste ut alt dataen vi har fått inn ...!
+                    break
 
 def CheckForFinish(flags, listOfData):#This is just a placeholder function for now. TODO fiks
     print("This is just a test!")
