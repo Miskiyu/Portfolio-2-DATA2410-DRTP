@@ -155,7 +155,7 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
 
 def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     print("Go-Back-N reliability method")
-    listOfData = []
+    listOfData = PackFile(fileForTransfer)
     i = 0
     while i < len(listOfData):
         if(len(listOfData) - i >= 5):
@@ -199,7 +199,7 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
     return seq_num
 
-def PackFile(fileForTransfer):
+def PackFile(fileForTransfer): #This function pa
     listOfData = []
     with open(fileForTransfer, "rb") as file:
        while True:
@@ -207,6 +207,7 @@ def PackFile(fileForTransfer):
            if not data:
                break
            listOfData.append(data)
+    return listOfData
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
 
@@ -272,13 +273,12 @@ def createServer(ip, port, method):
                     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
                     serverSocket.sendto(msg, clientAddress)
             #Staten der vi er ferdige med å motta data, og vil avslutte
-            elif(flags != 0 and listOfData):
+            elif(flags != 0 and listOfData): #TODO: Remoce this when the rest of the code works :)
                 if fin == 2:
                     print("First FIN recieved successfully at server from client!")
                     data = b''
                     sequence_number = 0
                     acknowledgment_number = 0
-                    window = 0 
                     flags = 6
                     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
                     serverSocket.sendto(msg, clientAddress)
@@ -291,7 +291,10 @@ def createServer(ip, port, method):
     else:
         print("Her kommer SR koden")
 
-
+def CheckForFinish(flags, listOfData):#This is just a placeholder function for now. TODO fiks
+    print("This is just a test!")
+    print(flags)
+    print(listOfData)
 
 def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
@@ -315,7 +318,7 @@ parser.add_argument("-t", "--testcase", help="Type in if you want to set a type 
 
 args = parser.parse_args()
 
-connection = (bind, port) #TODO: Gjennomgåande bruk denne
+# connection = (bind, port) TODO: Gjennomgåande bruk denne
 
 if args.client == True or args.server == True:
     if(args.client == True and args.server == True):
@@ -325,7 +328,7 @@ if args.client == True or args.server == True:
         if args.client == True:
             PackFile(args.file)
             if(check_port(args.port) and check_IP(args.serverip)):
-                createClient(args.serverip, args.port, args.reliability, args.fileForTransfer)
+                createClient(args.serverip, args.port, args.reliability, args.file)
         if(args.server == True):
             if(check_port(args.port) and check_IP(args.bind)):
                 createServer(args.bind, args.port, args.reliability)
