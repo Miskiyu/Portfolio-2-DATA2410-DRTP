@@ -199,7 +199,7 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
     return seq_num
 
-def PackFile(fileForTransfer): #This function pa
+def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
     listOfData = []
     with open(fileForTransfer, "rb") as file:
        while True:
@@ -208,6 +208,9 @@ def PackFile(fileForTransfer): #This function pa
                break
            listOfData.append(data)
     return listOfData
+
+def UnpackFile(fileToBeUnpacked): #TODO: This should unpack the data recieved by the server. 
+    print(fileToBeUnpacked)
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
 
@@ -239,6 +242,7 @@ def createServer(ip, port, method):
     seqNum = (int) (handshakeServer(serverSocket, ip, port))
     listOfData = []
     ackNum = seqNum
+    
     if(method == "SAW"):
         while True:
             message, clientAddress = serverSocket.recvfrom(2048)
@@ -284,10 +288,13 @@ def createServer(ip, port, method):
                     serverSocket.sendto(msg, clientAddress)
                 elif ack == 4:
                     print("Second FIN recieved successfully at server from client!")
+                    print(f"dette ligger i posisjon 0 i list of data: {listOfData.pop(0)}")
                     #Her må vi liste ut alt dataen vi har fått inn ...!
                     break
     elif(method == "GBN"):
         print("Her kommer GBN koden")
+        
+        
     else:
         print("Her kommer SR koden")
 
