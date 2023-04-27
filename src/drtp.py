@@ -11,9 +11,10 @@ import sys
 import re #Importing regex to check ip-adress for errors
 import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 
+window = 64000 #Window is always 64000, declaring it as a global variable at the start.
+
 socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 #Dette vil ikke fungere som en global variabel??
-
 
 def handshakeServer(serverSocket, ip, port):
     seqNum = 0
@@ -22,7 +23,6 @@ def handshakeServer(serverSocket, ip, port):
         
         sequence_number = 0
         acknowledgment_number = 0
-        window = 64000
         data = b'0' * 0
 
         data_from_msg = message[:12]
@@ -47,7 +47,6 @@ def handshakeServer(serverSocket, ip, port):
 def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
     sequence_number = 1
     acknowledgment_number = 0
-    window = 64000
     flags = 8
     data = b'0' * 0
 
@@ -84,7 +83,7 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
         print("Går inn i stopAndWait metode")
         seqNum = (int) (stop_and_wait(clientSocket, fileForTransfer, serverConnection, seqNum))
     elif(method == "GBN"):
-        print("Here comes GBN method")
+        seqNum = (int) (goBackN(clientSocket, fileForTransfer, serverConnection, seqNum))
     else:
         print("Here comes SR method")
 
@@ -95,7 +94,6 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
         data = b'0' * 0
         sequence_number = seqNum
         acknowledgment_number = 0
-        window = 0 
         flags = 2
         msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
         #Encoding packet and sending it to server ip and port
@@ -134,7 +132,6 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
     while i < len(listeMedData):
         print("sender data i StopAndWait metoden")
         data = listeMedData[i]
-        window = 64000 
         flags = 0
         packet= header.create_packet(seq_num, 0, flags, window, data)
         try:
@@ -155,6 +152,61 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
         except socket.timeout:
                 print("Timeout, resending packet...")
     return seq_num
+
+def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
+    print("Go-Back-N reliability method")
+    listOfData = []
+    i = 0
+    while i < len(listOfData):
+        if(len(listOfData) - i >= 5):
+            k = 0
+            dataTransfer = []
+            ackList = []
+            while k < 5:
+                dataTransfer[k] = listOfData[i + k]
+                k+=1
+
+            w = 0
+            sumSeq = 0
+            while len(ackList) <= 5:
+                flags = 0
+                packet= header.create_packet(seq_num + w, 0, flags, window, dataTransfer[w])
+                #Oppdaterer sumSeq som vi bruker for å sjekke om vi fikk alle acks som ble sendt i denne omgang til 
+                sumSeq += seq_num + w
+
+                if(w < 5): 
+                    try:   
+                        clientSocket.sendto(packet, serverConnection)
+                        # clientSocket.settimeout(0.5)
+                        ack, serverConnection =  clientSocket.recvfrom(2048)
+                        header_from_msg = ack[:12]
+                        seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+                        syn, ack, fin = header.parse_flags(flags)
+                        
+                        ackList.append(acknum)
+                        w += 1
+                    except socket.timeout:
+                        print("Timeout, resending packet...")
+            #Vi sjekker om antall acks og nummeret deres stemmer overens med seqnummer av pakker sendt til server
+            sjekk = False
+            if sum(ackList) == sumSeq:
+                sjekk = True
+
+            if(sjekk):
+                seq_num += 5
+                i += 5
+        else:
+            print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
+    return seq_num
+
+def PackFile(fileForTransfer):
+    listOfData = []
+    with open(fileForTransfer, "rb") as file:
+       while True:
+           data = file.read(1460)
+           if not data:
+               break
+           listOfData.append(data)
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
 
@@ -204,7 +256,6 @@ def createServer(ip, port, method):
                     data = b''
                     sequence_number = 0
                     acknowledgment_number = ackNum
-                    window = 0 
                     flags = 4
                     
                     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
@@ -216,7 +267,6 @@ def createServer(ip, port, method):
                     data = b''
                     sequence_number = 0
                     acknowledgment_number = ackNum
-                    window = 0 
                     flags = 4
                     
                     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
@@ -265,12 +315,7 @@ parser.add_argument("-t", "--testcase", help="Type in if you want to set a type 
 
 args = parser.parse_args()
 
-serverip = args.serverip
-bind = args.bind
-port = args.port
-method = args.reliability
-fileForTransfer = args.file
-
+connection = (bind, port) #TODO: Gjennomgåande bruk denne
 
 if args.client == True or args.server == True:
     if(args.client == True and args.server == True):
@@ -278,11 +323,12 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if args.client == True:
-            if(check_port(port) and check_IP(serverip)):
-                createClient(serverip, port, method, fileForTransfer)
+            PackFile(args.file)
+            if(check_port(args.port) and check_IP(args.serverip)):
+                createClient(args.serverip, args.port, args.reliability, args.fileForTransfer)
         if(args.server == True):
-            if(check_port(port) and check_IP(bind)):
-                createServer(bind, port, method)
+            if(check_port(args.port) and check_IP(args.bind)):
+                createServer(args.bind, args.port, args.reliability)
 else:
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
