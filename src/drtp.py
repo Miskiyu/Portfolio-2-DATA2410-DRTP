@@ -13,6 +13,8 @@ import inspect # Brukt for å få informasjon om objekt i koden. https://docs.py
 
 socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 
+
+
 def handshakeServer(serverSocket, IP, port):
     message, (serverip, port) = serverSocket.recvfrom(2048)
     
@@ -40,10 +42,10 @@ def handshakeServer(serverSocket, IP, port):
         return
     
 def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
-    sequence_number = 0
+    sequence_number = 0  
     acknowledgment_number = 0
     window = 64000
-    flags = 8
+    flags = 8 
     data = b'0' * 0
 
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
