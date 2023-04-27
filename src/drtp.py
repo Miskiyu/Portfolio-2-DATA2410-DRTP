@@ -13,9 +13,6 @@ import inspect # Brukt for å få informasjon om objekt i koden. https://docs.py
 
 window = 64000 #Window is always 64000, declaring it as a global variable at the start.
 
-socket.timeout(500) #The default timeout for any socket operation is 500 ms.
-#Dette vil ikke fungere som en global variabel??
-
 def handshakeServer(serverSocket, ip, port):
     seqNum = 0
     while True:
@@ -136,7 +133,6 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
         packet= header.create_packet(seq_num, 0, flags, window, data)
         try:
                 clientSocket.sendto(packet, serverConnection)
-               # clientSocket.settimeout(0.5)
                 ack, serverConnection =  clientSocket.recvfrom(1472)
                 header_from_msg = ack[:12]
                 seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
@@ -158,16 +154,16 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     listOfData = PackFile(fileForTransfer)
     i = 0
     print(f" lengde av listofData: {len(listOfData)}")
+    ackList = []
     while i < len(listOfData):
+        print("Nå er vi inne i whileløkken som skal gå til vi er tom for data å sende")
         dataTransfer = []
-        ackList = []
 
         if(len(listOfData) - i >= 5):
             k = 0
             while k < 5 :
                 dataTransfer.append(listOfData[i + k])
                 k+=1
-
         else: #If there's less than 5 packets left to send, we send those packets, and a few extra packets so that the total amount of packets sent is 5. 
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
             antallTommePakker = len(listOfData) - seq_num
@@ -176,37 +172,45 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
             while k < len(listOfData):
                 dataTransfer.append(listOfData[i + k])
                 k += 1
-            
-            for i in range(antallTommePakker):
+            for j in range(antallTommePakker):
                 data = b'0' * 0
                 dataTransfer.append(data)
 
-        w = 0
         sumSeq = 0
-        while len(ackList) <= 5:
+        for j in range(5):
             flags = 0
-            packet= header.create_packet(seq_num + w, 0, flags, window, dataTransfer[w])
-            #Oppdaterer sumSeq som vi bruker for å sjekke om vi fikk alle acks som ble sendt i denne omgang til 
-            sumSeq += seq_num + w
-
-            if(w < 5): 
-                try:   
+            packet= header.create_packet(seq_num + j, 0, flags, window, dataTransfer[j])
+            try:   
                     clientSocket.sendto(packet, serverConnection)
-                    # clientSocket.settimeout(0.5)
-                    ack, serverConnection =  clientSocket.recvfrom(12)
-                    header_from_msg = ack[:12]
-                    seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
-                    syn, ack, fin = header.parse_flags(flags)
-                    
-                    ackList.append(acknum)
-                    w += 1
-                except socket.timeout:
-                    print("Timeout, resending packet...")
-        #Vi sjekker om antall acks og nummeret deres stemmer overens med seqnummer av pakker sendt til server
+            except socket.timeout:
+                    print("Timeout, resending packets...")
+            sumSeq += seq_num + j
+        
+        clientSocket.settimeout(5)
+        for j in range(5):
+            try:
+                ack, serverConnection =  clientSocket.recvfrom(12)
+                print("test")
+                header_from_msg = ack[:12]
+                seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+                syn, ack, fin = header.parse_flags(flags)
+                print(f"Legger til acknum: {acknum}")
+                ackList.append(acknum)
+            except:
+                print("Breaker ut av reciving packets")
+                break
+        
         sjekk = False
-        if sum(ackList) == sumSeq:
-            sjekk = True
 
+        print(sum(ackList))
+        print(sumSeq)
+
+        if sum(sum(ackList)) == sumSeq:
+            sjekk = True
+        
+        print(f"verdi av sjekk: {sjekk}")
+        print(f"sec_num: {seq_num}")
+        print(f"i: {i}")
         if(sjekk):
             seq_num += 5
             i += 5
@@ -218,10 +222,42 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
     window_size = 5
     buffer = [] #buffer to hold received packet that are out of order
     forventetSeq = 0 #
+    flags = 0
     i = 0
+    socket.timeout(0.5) #The default timeout for any socket operation is 500 ms.
+
     while i < len(listOfData):
-        if len(listOfData) - i >= window_size:
-            return
+        k= 0
+        packetSend= []  #liste for å holde packet som blir sendt
+        while k < 5 and i < len(listOfData):
+             packet= header.create_packet(seq_num + k, 0, flags, window, listOfData[i])
+             packetSend.append(packet)
+             k+=1
+             i+=1
+        for packet in packetSend:
+            clientSocket.sendto(packet,serverConnection)
+        
+        #recv fasen
+        try:
+            ack,serverConnection=clientSocket.recvfrom(12)
+            header_from_msg = ack[:12]
+            seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+            syn, ack, fin = header.parse_flags(flags)
+        
+
+            #sjekker om packet er i rekkefølge hvis den er det ikke legger den i buffer
+            if acknum == forventetSeq:
+                buffer[ack]=acknum
+                forventetSeq = acknum +1
+            else:
+                forventetSeq=acknum+1
+                
+        except socket.timeout():
+            print("Timeout, resending packet")
+            
+            
+             
+            
             
     print("Inne")
 
@@ -327,6 +363,9 @@ def createServer(ip, port, method):
             seq, acknum, flags, win = header.parse_header(header_from_msg)
             syn, ack, fin = header.parse_flags(flags)
             if(flags == 0):
+                print("Henter ut melding der flagg er 0")
+                print(f"chcechSeqNum: {checkSeqNum}")
+                print(f"seq: {seq}")
                 if checkSeqNum == seq:
                     bufferData.append(message[12:])
                     checkSeqNum += 1
