@@ -168,10 +168,10 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
             antallTommePakker = len(listOfData) - i 
 
-            for p in range(5-antallTommePakker): #Preparing the remaing packets to be
+            for p in range(5-antallTommePakker): #Preparing the remaing packets to be sent.
                 dataTransfer.append(listOfData[p])
                 
-            for j in range(antallTommePakker):
+            for j in range(antallTommePakker): #Ading empty packets so that we got 5 packets left to send.
                 data = b'0' * 0
                 dataTransfer.append(data)
 
@@ -216,54 +216,110 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     return seq_num
 
 def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
+    print("SNR reliability method")
     listOfData = PackFile(fileForTransfer)
-    window_size = 5
-    buffer = [] #buffer to hold received packet that are out of order
-    forventetSeq = 0 #
-    flags = 0
+    
     i = 0
-    socket.timeout(0.5) #The default timeout for any socket operation is 500 ms.
+    print(f" lengde av listofData: {len(listOfData)}")
+    ackList = []
+    allSentPacketNumbers = []
 
     while i < len(listOfData):
-        k= 0
-        packetSend= []  #liste for å holde packet som blir sendt
-        while k < 5 and i < len(listOfData):
-             packet= header.create_packet(seq_num + k, 0, flags, window, listOfData[i])
-             packetSend.append(packet)
-             k+=1
-             i+=1
-        for packet in packetSend:
-            clientSocket.sendto(packet,serverConnection)
-        
-        #recv fasen
-        try:
-            ack,serverConnection=clientSocket.recvfrom(12)
-            header_from_msg = ack[:12]
-            seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
-            syn, ack, fin = header.parse_flags(flags)
-        
+        print("Nå er vi inne i whileløkken som skal gå til når vi er tom for data å sende")
+        dataTransfer = []
+        if(allSentPacketNumbers.count() == 0):
+            if(len(listOfData) - i >= 5):
+                for k in range(5):
+                    dataTransfer.append(listOfData[i + k])
+            else: #If there's less than 5 packets left to send, we send those packets, and a few extra packets so that the total amount of packets sent is 5. 
+                print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
+                antallTommePakker = len(listOfData) - i 
 
-            #sjekker om packet er i rekkefølge hvis den er det ikke legger den i buffer
-            if acknum == forventetSeq:
-                buffer[ack]=acknum
-                forventetSeq = acknum +1
-            else:
-                forventetSeq=acknum+1
-                
-        except socket.timeout():
-            print("Timeout, resending packet")
-    if forventetSeq in buffer:
-            forventetSeq+=1
-    else:
-             packet = header.create_packet(seq, forventetSeq +1, 0, window, b'')
-             clientSocket.sendto(packet, serverConnection)
+                for p in range(5-antallTommePakker): #Preparing the remaing packets to be sent.
+                    dataTransfer.append(listOfData[p])
+                    
+                for j in range(antallTommePakker): #Ading empty packets so that we got 5 packets left to send.
+                    data = b'0' * 0
+                    dataTransfer.append(data)
 
+            for j in range(5):
+                flags = 0
+                packet= header.create_packet(seq_num + j, 0, flags, window, dataTransfer[j])
+                try:   
+                        clientSocket.sendto(packet, serverConnection)
+                except socket.timeout:
+                        print("Timeout, resending packets...")
+                allSentPacketNumbers.append(seq_num + j) 
+
+            clientSocket.settimeout(0.5)
+            for j in range(5):
+                try:
+                    ack, serverConnection =  clientSocket.recvfrom(12)
+                    print("test")
+                    header_from_msg = ack[:12]
+                    seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+                    syn, ack, fin = header.parse_flags(flags)
+                    print(f"Legger til acknum: {acknum}")
+                    ackList.append(acknum)
+                except:
+                    print("Breaker ut av reciving packets")
+                    break
+
+            print(sum(ackList))
             
+            for i in ackList:
+                for j in allSentPacketNumbers:  #Den kan bli ut av range hvis vi popper
+                    if ackList[i]==allSentPacketNumbers[j]:
+                        allSentPacketNumbers.pop(j)
+            
+            if(allSentPacketNumbers.count == 0):
+                seq_num += 5
+                i += 5
+        else:
+            print("Dette er tilfellet der ack ikke kom tilbake for en pakke, og den skal sendes til den mottas hos server og acken kommmer")
+            indexForTransfer = []
+            allSentPacketNumbers.sort() #Sorterer etter stigende rekkefølge
+
+            for a in allSentPacketNumbers:
+                indexForTransfer.append(a - 2) #Finner variabel i sin verdi i listen for å hente ut riktig data til transfer
+            for b in indexForTransfer:
+                dataTransfer.append(listOfData[b]) #Finner dataen vi må sende på ny til server
+            
+            for j in len(dataTransfer):
+                flags = 0
+                packet= header.create_packet(allSentPacketNumbers[j], 0, flags, window, dataTransfer[j])
+                try:   
+                        clientSocket.sendto(packet, serverConnection)
+                except socket.timeout:
+                        print("Timeout, resending packets...") 
+        
+            clientSocket.settimeout(0.5)
+            for j in len(dataTransfer):
+                try:
+                    ack, serverConnection =  clientSocket.recvfrom(12)
+                    header_from_msg = ack[:12]
+                    seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
+                    syn, ack, fin = header.parse_flags(flags)
+                    print(f"Legger til acknum: {acknum}")
+                    ackList.append(acknum)
+                except:
+                    print("Breaker ut av reciving packets")
+                    break
+            
+            for i in ackList:
+                for j in allSentPacketNumbers:  #Den kan bli ut av range hvis vi popper
+                    if ackList[i]==allSentPacketNumbers[j]:
+                        allSentPacketNumbers.pop(j)
+            
+            if(allSentPacketNumbers.count == 0):
+                seq_num += 5
+                i += 5
+                
+    return seq_num 
              
             
             
-    print("Inne")
-
+   
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
     listOfData = []
     with open(fileForTransfer, "rb") as file:
