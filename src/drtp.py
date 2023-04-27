@@ -19,8 +19,8 @@ socket.timeout(500) #The default timeout for any socket operation is 500 ms.
 def handshakeServer(serverSocket, ip, port):
     seqNum = 0
     while True:
-        message, (ip, port) = serverSocket.recvfrom(2048)
-        
+        message, (ip, port) = serverSocket.recvfrom(12)
+
         sequence_number = 0
         acknowledgment_number = 0
         data = b'0' * 0
@@ -53,7 +53,7 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
     clientSocket.sendto(msg, (serverip, port))
     
-    modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+    modifiedMessage, serverConnection = clientSocket.recvfrom(12)
 
     
     data_from_msg = modifiedMessage[:12]
@@ -100,7 +100,7 @@ def transmittAndListen(clientSocket, serverConnection, serverip, port, fileForTr
         clientSocket.sendto(msg, serverConnection)
         print("Har sendt meldingen til server")
 
-        modifiedMessage, serverConnection = clientSocket.recvfrom(2048)
+        modifiedMessage, serverConnection = clientSocket.recvfrom(12)
         print("Vi har motatt melding fra server")
         data_from_msg = modifiedMessage[:12]
         seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
@@ -137,7 +137,7 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
         try:
                 clientSocket.sendto(packet, serverConnection)
                # clientSocket.settimeout(0.5)
-                ack, serverConnection =  clientSocket.recvfrom(2048)
+                ack, serverConnection =  clientSocket.recvfrom(1472)
                 header_from_msg = ack[:12]
                 seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
                 syn, ack, fin = header.parse_flags(flags)
@@ -178,7 +178,7 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
                     try:   
                         clientSocket.sendto(packet, serverConnection)
                         # clientSocket.settimeout(0.5)
-                        ack, serverConnection =  clientSocket.recvfrom(2048)
+                        ack, serverConnection =  clientSocket.recvfrom(12)
                         header_from_msg = ack[:12]
                         seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
                         syn, ack, fin = header.parse_flags(flags)
@@ -198,6 +198,10 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
         else:
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
     return seq_num
+
+def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
+    listOfData = PackFile(fileForTransfer)
+    print("Inne")
 
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
     listOfData = []
@@ -245,7 +249,7 @@ def createServer(ip, port, method):
     
     if(method == "SAW"):
         while True:
-            message, clientAddress = serverSocket.recvfrom(2048)
+            message, clientAddress = serverSocket.recvfrom(1472)
             header_from_msg = message[:12]
             seq, acknum, flags, win = header.parse_header(header_from_msg)
             syn, ack, fin = header.parse_flags(flags)
@@ -258,7 +262,7 @@ def createServer(ip, port, method):
                 if(seq == ackNum):
                     listOfData.append((seq ,message[12:]))
                 
-                    data = b''
+                    data = b'' #TODO ?
                     sequence_number = 0
                     acknowledgment_number = ackNum
                     flags = 4
@@ -293,8 +297,19 @@ def createServer(ip, port, method):
                     break
     elif(method == "GBN"):
         print("Her kommer GBN koden")
-        
-        
+        bufferData = []
+        while True:
+            for i in range(5):
+                message, clientAddress = serverSocket.recvfrom(1472)
+                header_from_msg = message[:12]
+                seq, acknum, flags, win = header.parse_header(header_from_msg)
+                syn, ack, fin = header.parse_flags(flags)
+                if seqNum == seq:
+                    bufferData.append(message[12:])
+                if i == 5:
+                    seqNum += i*5-(5+4+3+2+1)
+            
+            print("This!") 
     else:
         print("Her kommer SR koden")
 
