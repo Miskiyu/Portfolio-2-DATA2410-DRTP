@@ -152,31 +152,29 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
 def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     print("Go-Back-N reliability method")
     listOfData = PackFile(fileForTransfer)
+    
     i = 0
     print(f" lengde av listofData: {len(listOfData)}")
     ackList = []
-    while i < len(listOfData):
-        print("Nå er vi inne i whileløkken som skal gå til vi er tom for data å sende")
-        dataTransfer = []
+    sumSeq = 0
 
+    while i < len(listOfData):
+        print("Nå er vi inne i whileløkken som skal gå til når vi er tom for data å sende")
+        dataTransfer = []
         if(len(listOfData) - i >= 5):
-            k = 0
-            while k < 5 :
+            for k in range(5):
                 dataTransfer.append(listOfData[i + k])
-                k+=1
         else: #If there's less than 5 packets left to send, we send those packets, and a few extra packets so that the total amount of packets sent is 5. 
             print("Mindre enn 5 pakker igjen, må da regne hvor mange det er og sende de")
-            antallTommePakker = len(listOfData) - seq_num
-            k = seq_num
+            antallTommePakker = len(listOfData) - i 
 
-            while k < len(listOfData):
-                dataTransfer.append(listOfData[i + k])
-                k += 1
+            for p in range(5-antallTommePakker): #Preparing the remaing packets to be
+                dataTransfer.append(listOfData[p])
+                
             for j in range(antallTommePakker):
                 data = b'0' * 0
                 dataTransfer.append(data)
 
-        sumSeq = 0
         for j in range(5):
             flags = 0
             packet= header.create_packet(seq_num + j, 0, flags, window, dataTransfer[j])
@@ -205,7 +203,7 @@ def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
         print(sum(ackList))
         print(sumSeq)
 
-        if sum(sum(ackList)) == sumSeq:
+        if sum(ackList) == sumSeq:
             sjekk = True
         
         print(f"verdi av sjekk: {sjekk}")
@@ -254,7 +252,12 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
                 
         except socket.timeout():
             print("Timeout, resending packet")
-            
+    if forventetSeq in buffer:
+            forventetSeq+=1
+    else:
+             packet = header.create_packet(seq, forventetSeq +1, 0, window, b'')
+             clientSocket.sendto(packet, serverConnection)
+
             
              
             
@@ -370,12 +373,14 @@ def createServer(ip, port, method):
                     bufferData.append(message[12:])
                     checkSeqNum += 1
                     if(len(bufferData) == 5):
+                        print("Bufferdata er lik 5")
                         for i in bufferData:
                             listOfData.append(i)
-                        bufferData.clear
+                        bufferData.clear()
                         seqNum += 5
                         checkSeqNum = seqNum
-                        for i in range(5):
+                        for i in range(5): #Sending the 5 acks to the client
+                            print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
                             data = b''
                             sequence_number = 0
                             acknowledgment_number = ackNum
@@ -385,6 +390,7 @@ def createServer(ip, port, method):
                             serverSocket.sendto(msg, clientAddress)
                             ackNum+=1
                 else:
+                    print("Kommer inn i else i GBN")
                     checkSeqNum = seqNum
                     bufferData.clear()
             else:
