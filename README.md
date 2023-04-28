@@ -16,7 +16,7 @@ The server can be invoked with
 Other command-line options:
 
     -r, --reliable         reliability functions (STP,GBN or SP)
-    -t, --tes_case         to skip ack to trigger retransmission 
+    -t, --testcase         to skip ack to trigger retransmission 
 
 
 ## Client mode ##
@@ -27,7 +27,7 @@ The client can be invoked with:
 Other command-line options:
 
     -r, --reliable         reliability functions (STP,GBN or SP)
-    -t, --test_case        if you want to skip ack to trigger retransmission 
+    -t, --testcase        if you want to skip ack to trigger retransmission 
 
 Reliablity functions
 --------------------

@@ -12,6 +12,7 @@ import re #Importing regex to check ip-adress for errors
 import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 import os #Used to see if the file name given is valid (exists and is accessible)
 import random
+import time
 
 window = 64000 #Window is always 64000, declaring it as a global variable at the start.
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
@@ -163,7 +164,6 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
                 header_from_msg = ack[:12]
                 seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
                 syn, ack, fin = header.parse_flags(flags)
-
                 if acknum == seq_num:
                     seq_num +=1
                     i+=1
@@ -382,36 +382,22 @@ def createServer(method):
         serverSR(serverSocket, seqNum, listOfData)
 
 def serverSaw(serverSocket, seqNum, listOfData):
-    ackNum = seqNum
     while True:
             message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
             header_from_msg = message[:12] #Getting the header
             seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
-            syn, ack, fin = header.parse_flags(flags) #We need to check the fin flag
-            sequence_number=acknum + 1
-            '''
-            print(f"Dette er flags: {flags}")
-            print(f"Dette er ack og fin: {ack}, {fin}")
-            print(f"Dette er ackNum og seqNum: {acknum}, {seq}")
-            TODO: slett desse?
-            '''
+            ack=seq
             if(flags == 0):
-                if(seq == ackNum):
-                    listOfData.append((seq ,message[12:]))
-                    acknowledgment_number = ackNum
-                    sendAck(sequence_number, serverSocket, clientSocket)
-                else:
-                    #Ack never reached the client, recieved a duplicate packet. Sending new ack
-                    acknowledgment_number = ackNum
-                    sendAck(sequence_number, serverSocket, clientSocket)
-            #Staten der vi er ferdige med å motta data, og vil avslutte
+                listOfData.append((seq ,message[12:]))
+                sendAck(ack, serverSocket, clientSocket)
             elif(flags != 0 and listOfData): #TODO: Remove this when the rest of the code works :) We need a fin function!!!
+                syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
                 if fin == 2:
                     print("First FIN recieved successfully at server from client!")
                     acknowledgment_number = 0
                     flags = 6
                     data= b''
-                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                    msg = header.create_packet(seq, acknowledgment_number, flags, window, data)
                     serverSocket.sendto(msg, clientSocket)
                 elif ack == 4:
                     print("Second FIN recieved successfully at server from client!")
@@ -419,9 +405,9 @@ def serverSaw(serverSocket, seqNum, listOfData):
                     #Her må vi liste ut alt dataen vi har fått inn ...!
                     break
 
-def sendAck(sequence_number, serverSocket, clientSocket): #Creating a function to send acks to client. Will randomly not send ack when -t skipack flag is used
+def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a function to send acks to client. Will randomly not send ack when -t skipack flag is used
     data = b''
-    acknowledgment_number = 0
+    sequence_number = 0
     flags = 4
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
     if args.testcase == "skipack":
@@ -434,11 +420,13 @@ def sendingPacket(seq_num,data, clientSocket,serverConnection): #Creating a func
      flags = 0
      packet= header.create_packet(seq_num, 0, flags, window, data)
      if args.testcase == "loss":
-        if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a 50% chance to loose a packet.
-          clientSocket.sendto(packet, serverConnection)
+        if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a chance to loose a packet.
+          print("just a test")
+
+        else:
+            clientSocket.sendto(packet, serverConnection)
      else:
          clientSocket.sendto(packet, serverConnection)
-
 
 def serverGBN(serverSocket, seqNum, listOfData):
     bufferData = []
@@ -480,7 +468,7 @@ def serverGBN(serverSocket, seqNum, listOfData):
             print("Kommer inn i avslutningsfasen i server for GBN metode")
             if fin == 2:
                 print("First FIN recieved successfully at server from client!")
-                serverSocket.sendto(serverSocket, msg, clientAddress) #Function to send acks..
+                serverSocket.sendto(msg, clientAddress) #Function to send acks..
             elif ack == 4:
                 print("Second FIN recieved successfully at server from client!")
                 #Her må vi liste ut alt dataen vi har fått inn ...!
@@ -577,6 +565,7 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if args.client == True:
+            socket.setdefaulttimeout(0.5) #Setting socket timeout for the client.
             PackFile(args.file)
             if(check_port(args.port) and check_IP(args.serverip)):
                 createClient(args.serverip, args.port, args.reliability, args.file)
