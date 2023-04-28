@@ -358,7 +358,7 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
            listOfData.append(data)
     return listOfData
 
-def UnpackFile(fileToBeUnpacked,outputFileName): #TODO: This should unpack the data recieved by the server. 
+def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data recieved by the server. 
     print(fileToBeUnpacked) # liste med data mottatt av serveren
     with open(outputFileName,"wb")as outputFIle: # outputFileName er den nye filen,"wb" betyr at filen skal åpnes i binær modus
         for data in fileToBeUnpacked:
@@ -390,7 +390,7 @@ def serverSaw(serverSocket, seqNum, listOfData):
             if(flags == 0):
                 listOfData.append((seq ,message[12:]))
                 sendAck(ack, serverSocket, clientSocket)
-            elif(flags != 0 and listOfData): #TODO: Remove this when the rest of the code works :) We need a fin function!!!
+            elif(flags != 0 and listOfData): # Remove this when the rest of the code works :) We need a fin function!!!
                 syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
                 if fin == 2:
                     print("First FIN recieved successfully at server from client!")
