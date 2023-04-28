@@ -10,13 +10,40 @@ import socket
 import sys
 import re #Importing regex to check ip-adress for errors
 import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
+import os #Used to see if the file name given is valid (exists and is accessible)
+import random
 
 window = 64000 #Window is always 64000, declaring it as a global variable at the start.
+def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
+    if not re.search(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", ip_address): #Check that the format is like this: "XXX.XXX.XXX.XXX", where X is a number between 0 and 9.
+        raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
 
-def handshakeServer(serverSocket, ip, port):
-    seqNum = 0
+    ip_split = ip_address.split(".") #Splits the IP-adress string based on the periods, and in the for loop checks that each byte is from 0 to 255.
+  
+    for ip_part in ip_split: #Checking that each number in the IP-adress is between 0 and 255. 
+       if int(ip_part) < 0 or int(ip_part) > 255:
+            raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
+    return ip_address
+
+def check_port(port): #Code to check that the port is written is valid. Inspired from the starter code for portfolio 1. 
+    try:
+        value = int(port)
+    except ValueError:
+        raise argparse.ArgumentTypeError("Expected an integer but you entered a " + str(type(port))) #Need to convert type(val) to string to append to the string.
+    if (value<1024 or value >65535):
+        raise Exception("The port number is not valid, please choose a port number from 1024 to 65535")
+    return value
+
+def check_file(file):
+    if os.path.exists(file):
+        return file
+    else:
+        print(f"The file {file} is not valid. Make sure you gave the correct path from the current dictionary")
+        sys.exit()
+
+def handshakeServer(serverSocket):
     while True:
-        message, (ip, port) = serverSocket.recvfrom(12)
+        message, (args.ip, args.port) = serverSocket.recvfrom(12)
 
         sequence_number = 0
         acknowledgment_number = 0
@@ -32,7 +59,7 @@ def handshakeServer(serverSocket, ip, port):
             seqNum = 2
             flags = 12
             msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-            serverSocket.sendto(msg, (ip, port))
+            serverSocket.sendto(msg, (args.ip, args.port))
 
         print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
         print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")    
@@ -130,9 +157,8 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
         print("sender data i StopAndWait metoden")
         data = listeMedData[i]
         flags = 0
-        packet= header.create_packet(seq_num, 0, flags, window, data)
         try:
-                clientSocket.sendto(packet, serverConnection)
+                sendingPacket(seq_num,data, clientSocket,serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
                 ack, serverConnection =  clientSocket.recvfrom(1472)
                 header_from_msg = ack[:12]
                 seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
@@ -144,10 +170,11 @@ def stop_and_wait(clientSocket, fileForTransfer, serverConnection, seq_num):
                     continue
                 elif acknum == seq_num - 1:
                     print("Duplicate ACK received, resending packet...")
-                    clientSocket.sendto(packet, serverConnection)
+                    sendingPacket(seq_num,data, clientSocket,serverConnection) 
         except socket.timeout:
                 print("Timeout, resending packet...")
     return seq_num
+
 
 def goBackN(clientSocket, fileForTransfer, serverConnection, seq_num):
     print("Go-Back-N reliability method")
@@ -320,10 +347,7 @@ def selectiveRepeat(clientSocket, fileForTransfer, serverConnection, seq_num):
                 i += 5
                 
     return seq_num 
-             
-            
-            
-   
+                     
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
     listOfData = []
     with open(fileForTransfer, "rb") as file:
@@ -334,196 +358,191 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
            listOfData.append(data)
     return listOfData
 
-def UnpackFile(fileToBeUnpacked): #TODO: This should unpack the data recieved by the server. 
-    print(fileToBeUnpacked)
+def UnpackFile(fileToBeUnpacked,outputFileName): #TODO: This should unpack the data recieved by the server. 
+    print(fileToBeUnpacked) # liste med data mottatt av serveren
+    with open(outputFileName,"wb")as outputFIle: # outputFileName er den nye filen,"wb" betyr at filen skal åpnes i binær modus
+        for data in fileToBeUnpacked:
+            outputFIle.write(data)
 
-def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
 
-    if not re.search(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", ip_address): #Check that the format is like this: "XXX.XXX.XXX.XXX", where X is a number between 0 and 9.
-        raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
-
-    ip_split = ip_address.split(".") #Splits the IP-adress string based on the periods, and in the for loop checks that each byte is from 0 to 255.
-  
-    for ip_part in ip_split:
-       if int(ip_part) < 0 or int(ip_part) > 255:
-            raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
-    return ip_address
-
-def check_port(port): #Code to check that the port is written is valid. Inspired from the starter code for portfolio 1. 
-    try:
-        value = int(port)
-    except ValueError:
-        raise argparse.ArgumentTypeError("Expected an integer but you entered a " + str(type(port))) #Need to convert type(val) to string to append to the string.
-    if (value<1024 or value >65535):
-        raise Exception("The port number is not valid, please choose a port number from 1024 to 65535")
-    return value
-
-def createServer(ip, port, method):
+def createServer(method):
     print("Her opprettes server:")
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    serverSocket.bind((ip, port))
+    serverSocket.bind((args.bind, args.port))
     print('The server is ready to receive')
 
-    seqNum = (int) (handshakeServer(serverSocket, ip, port))
+    seqNum = (int) (handshakeServer(serverSocket))
     listOfData = []
-    ackNum = seqNum
     
     if(method == "SAW"):
-        while True:
-            message, clientAddress = serverSocket.recvfrom(1472)
-            header_from_msg = message[:12]
-            seq, acknum, flags, win = header.parse_header(header_from_msg)
-            syn, ack, fin = header.parse_flags(flags)
-            
-            #Staten der vi legger inn data etterhvert som det kommer
+        serverSaw(serverSocket, seqNum, listOfData)
+    elif(method == "GBN"):
+        serverGBN(serverSocket, seqNum, listOfData)                     
+    else:
+        serverSR(serverSocket, seqNum, listOfData)
+
+def serverSaw(serverSocket, seqNum, listOfData):
+    ackNum = seqNum
+    while True:
+            message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
+            header_from_msg = message[:12] #Getting the header
+            seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
+            syn, ack, fin = header.parse_flags(flags) #We need to check the fin flag
+            sequence_number=acknum + 1
+            '''
             print(f"Dette er flags: {flags}")
             print(f"Dette er ack og fin: {ack}, {fin}")
             print(f"Dette er ackNum og seqNum: {acknum}, {seq}")
+            TODO: slett desse?
+            '''
             if(flags == 0):
                 if(seq == ackNum):
                     listOfData.append((seq ,message[12:]))
-                    
-                    data = b''
-                    sequence_number = 0
                     acknowledgment_number = ackNum
-                    flags = 4
-                    
-                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                    serverSocket.sendto(msg, clientAddress)
-                    ackNum+=1
-                    
+                    sendAck(sequence_number, serverSocket, clientSocket)
                 else:
-                    #seq og acknum er lik. Pakken ble lagt til, men acken herifra kom aldri frem til client. Vi sender ny ack
-                    data = b''
-                    sequence_number = 0
+                    #Ack never reached the client, recieved a duplicate packet. Sending new ack
                     acknowledgment_number = ackNum
-                    flags = 4
-                    
-                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                    serverSocket.sendto(msg, clientAddress)
+                    sendAck(sequence_number, serverSocket, clientSocket)
             #Staten der vi er ferdige med å motta data, og vil avslutte
-            elif(flags != 0 and listOfData): #TODO: Remoce this when the rest of the code works :)
+            elif(flags != 0 and listOfData): #TODO: Remove this when the rest of the code works :) We need a fin function!!!
                 if fin == 2:
                     print("First FIN recieved successfully at server from client!")
-                    data = b''
-                    sequence_number = 0
                     acknowledgment_number = 0
                     flags = 6
+                    data= b''
                     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                    serverSocket.sendto(msg, clientAddress)
+                    serverSocket.sendto(msg, clientSocket)
                 elif ack == 4:
                     print("Second FIN recieved successfully at server from client!")
                     print(f"dette ligger i posisjon 0 i list of data: {listOfData.pop(0)}")
                     #Her må vi liste ut alt dataen vi har fått inn ...!
                     break
-    elif(method == "GBN"):
-        print("Her kommer GBN koden")
-        bufferData = []
-        checkSeqNum = seqNum
-        while True:
-            message, clientAddress = serverSocket.recvfrom(1472)
-            header_from_msg = message[:12]
-            seq, acknum, flags, win = header.parse_header(header_from_msg)
-            syn, ack, fin = header.parse_flags(flags)
-            if(flags == 0):
-                print("Henter ut melding der flagg er 0")
-                print(f"chcechSeqNum: {checkSeqNum}")
-                print(f"seq: {seq}")
-                if checkSeqNum == seq:
-                    bufferData.append(message[12:])
-                    checkSeqNum += 1
-                    if(len(bufferData) == 5):
-                        print("Bufferdata er lik 5")
-                        for i in bufferData:
-                            listOfData.append(i)
-                        bufferData.clear()
-                        seqNum += 5
-                        checkSeqNum = seqNum
-                        for i in range(5): #Sending the 5 acks to the client
-                            print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
-                            data = b''
-                            sequence_number = 0
-                            acknowledgment_number = ackNum
-                            flags = 4
-                            
-                            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                            serverSocket.sendto(msg, clientAddress)
-                            ackNum+=1
-                else:
-                    print("Kommer inn i else i GBN")
-                    checkSeqNum = seqNum
-                    bufferData.clear()
-            else:
-                print("Kommer inn i avslutningsfasen i server for GBN metode")
-                if fin == 2:
-                    print("First FIN recieved successfully at server from client!")
-                    data = b''
-                    sequence_number = 0
-                    acknowledgment_number = 0
-                    flags = 6
-                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                    serverSocket.sendto(msg, clientAddress)
-                elif ack == 4:
-                    print("Second FIN recieved successfully at server from client!")
-                    #Her må vi liste ut alt dataen vi har fått inn ...!
-                    break
-                                    
+
+def sendAck(sequence_number, serverSocket, clientSocket): #Creating a function to send acks to client. Will randomly not send ack when -t skipack flag is used
+    data = b''
+    acknowledgment_number = 0
+    flags = 4
+    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+    if args.testcase == "skipack":
+        if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a 50% chance to loose a packet.
+            serverSocket.sendto(msg, clientSocket)
     else:
-        print("Her kommer SR koden")
-        bufferData = []
-        checkSeqNum = seqNum
-        while True:
-            message, clientAddress = serverSocket.recvfrom(1472)
-            header_from_msg = message[:12]
-            seq, acknum, flags, win = header.parse_header(header_from_msg)
-            syn, ack, fin = header.parse_flags(flags)
-            if(flags == 0):
-                print("Henter ut melding der flagg er 0")
-                print(f"chcechSeqNum: {checkSeqNum}")
-                print(f"seq: {seq}")
-                if checkSeqNum == seq:
-                    bufferData.append(message[12:])
-                    checkSeqNum += 1
-                    if(len(bufferData) == 5):
-                        print("Bufferdata er lik 5")
-                        for i in bufferData:
-                            listOfData.append(i)
-                        bufferData.clear()
-                        seqNum += 5
-                        checkSeqNum = seqNum
-                        for i in range(5): #Sending the 5 acks to the client
-                            print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
-                            data = b''
-                            sequence_number = 0
-                            acknowledgment_number = ackNum
-                            flags = 4
-                            
-                            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                            serverSocket.sendto(msg, clientAddress)
-                            ackNum+=1
-                else: #Går inn i else hvis det er feil rekkefølge og sender på nytt
-                    print("Kommer inn i else i SR,det vil si at de ikke ble send i riktig rekkefølge ")
-                    flags = 4
-                    ackNum= checkSeqNum
-                    sequence_number = seqNum
-                    acknowledgment_number = ackNum
-                    data = b''
-                    packet  = header.create_packet(sequence_number, acknowledgment_number,flags,window,data)
-                    serverSocket.sendto(packet,clientAddress)
+        serverSocket.sendto(msg, clientSocket)
+
+def sendingPacket(seq_num,data, clientSocket,serverConnection): #Creating a function to send packets to server. Will randomly skip acks when -t skipack flag is used.
+     flags = 0
+     packet= header.create_packet(seq_num, 0, flags, window, data)
+     if args.testcase == "loss":
+        if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a 50% chance to loose a packet.
+          clientSocket.sendto(packet, serverConnection)
+     else:
+         clientSocket.sendto(packet, serverConnection)
+
+
+def serverGBN(serverSocket, seqNum, listOfData):
+    bufferData = []
+    checkSeqNum = seqNum
+    ackNum = seqNum
+    while True:
+        message, clientAddress = serverSocket.recvfrom(1472)
+        header_from_msg = message[:12]
+        seq, acknum, flags, win = header.parse_header(header_from_msg)
+        syn, ack, fin = header.parse_flags(flags)
+        if(flags == 0):
+            print("Henter ut melding der flagg er 0")
+            print(f"chcechSeqNum: {checkSeqNum}")
+            print(f"seq: {seq}")
+            if checkSeqNum == seq:
+                bufferData.append(message[12:])
+                checkSeqNum += 1
+                if(len(bufferData) == 5):
+                    print("Bufferdata er lik 5")
+                    for i in bufferData:
+                        listOfData.append(i)
+                    bufferData.clear()
+                    seqNum += 5
+                    checkSeqNum = seqNum
+                    for i in range(5): #Sending the 5 acks to the client
+                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
+                        data = b''
+                        sequence_number = 0
+                        acknowledgment_number = ackNum
+                        flags = 4
+                        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)   
+                        serverSocket.sendto(msg, clientAddress)
+                        ackNum+=1
             else:
-                print("Kommer inn i avslutningsfasen i server for SR metode")
-                if fin == 2:
-                    print("First FIN recieved successfully at server from client!")
-                    data = b''
-                    sequence_number = 0
-                    acknowledgment_number = 0
-                    flags = 6
-                    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                    serverSocket.sendto(msg, clientAddress)
-                elif ack == 4:
-                    print("Second FIN recieved successfully at server from client!")
-                    #Her må vi liste ut alt dataen vi har fått inn ...!
-                    break
+                print("Kommer inn i else i GBN")
+                checkSeqNum = seqNum
+                bufferData.clear()
+        else:
+            print("Kommer inn i avslutningsfasen i server for GBN metode")
+            if fin == 2:
+                print("First FIN recieved successfully at server from client!")
+                serverSocket.sendto(serverSocket, msg, clientAddress) #Function to send acks..
+            elif ack == 4:
+                print("Second FIN recieved successfully at server from client!")
+                #Her må vi liste ut alt dataen vi har fått inn ...!
+                break
+
+def serverSR(serverSocket, seqNum, listOfData):
+    bufferData = []
+    checkSeqNum = seqNum
+    ackNum=seqNum
+    while True:
+        message, clientAddress = serverSocket.recvfrom(1472)
+        header_from_msg = message[:12]
+        seq, acknum, flags, win = header.parse_header(header_from_msg)
+        syn, ack, fin = header.parse_flags(flags)
+        if(flags == 0):
+            print("Henter ut melding der flagg er 0")
+            print(f"chcechSeqNum: {checkSeqNum}")
+            print(f"seq: {seq}")
+            if checkSeqNum == seq:
+                bufferData.append(message[12:])
+                checkSeqNum += 1
+                if(len(bufferData) == 5):
+                    print("Bufferdata er lik 5")
+                    for i in bufferData:
+                        listOfData.append(i)
+                    bufferData.clear()
+                    seqNum += 5
+                    checkSeqNum = seqNum
+                    for i in range(5): #Sending the 5 acks to the client
+                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
+                        data = b''
+                        sequence_number = 0
+                        acknowledgment_number = ackNum
+                        flags = 4
+                        
+                        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                        serverSocket.sendto(msg, clientAddress)
+                        ackNum+=1
+            else: #Går inn i else hvis det er feil rekkefølge og sender på nytt
+                print("Kommer inn i else i SR,det vil si at de ikke ble send i riktig rekkefølge ")
+                flags = 4
+                ackNum= checkSeqNum
+                sequence_number = seqNum
+                acknowledgment_number = ackNum
+                data = b''
+                packet  = header.create_packet(sequence_number, acknowledgment_number,flags,window,data)
+                serverSocket.sendto(packet,clientAddress)
+                #må sjekke for ack også, noe jeg ikk
+        else:
+            print("Kommer inn i avslutningsfasen i server for SR metode")
+            if fin == 2:
+                print("First FIN recieved successfully at server from client!")
+                data = b''
+                sequence_number = 0
+                acknowledgment_number = 0
+                flags = 6
+                msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+                serverSocket.sendto(msg, clientAddress)
+            elif ack == 4:
+                print("Second FIN recieved successfully at server from client!")
+                #Her må vi liste ut alt dataen vi har fått inn ...!
+                break
 
 def CheckForFinish(flags, listOfData):#This is just a placeholder function for now. TODO fiks
     print("This is just a test!")
@@ -535,24 +554,22 @@ def createClient(serverip, port, method, fileForTransfer):
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     handshakeClient(clientSocket, serverip, port, method, fileForTransfer) #Sending a packet with the syn flag to the server, if an ack is recieved transmission of data starts.
     
+
 #Defining the argumentParser
 parser = argparse.ArgumentParser(description='The arguments used when calling the program')
-#server argument code
+#server arguments
 parser.add_argument("-s", "--server", help="try to type '-s", action="store_true")
 parser.add_argument("-b", "--bind", help="define an ip-address for the clients to connect to the host", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
-#shared argument code
-parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or default port 8080 will be set", type=check_port, default=8080)
-#client argument code
+#client arguments
 parser.add_argument("-c", "--client", help="try to type '-c", action="store_true")
 parser.add_argument("-I", "--serverip", help="Write the IP-address of the server to connect", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
-#Nye argumenter som brukes i denne portifolioen:
-parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=str)
+parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=check_file)
+#shared arguments
+parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or default port 8080 will be set", type=check_port, default=8080)
 parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
+#Nye argumenter som brukes i denne portifolioen:
 parser.add_argument("-t", "--testcase", help="Type in if you want to set a type of testcase", type=str, choices=['loss', 'skipack'])
-
 args = parser.parse_args()
-
-# connection = (bind, port) TODO: Gjennomgåande bruk denne
 
 if args.client == True or args.server == True:
     if(args.client == True and args.server == True):
@@ -565,7 +582,7 @@ if args.client == True or args.server == True:
                 createClient(args.serverip, args.port, args.reliability, args.file)
         if(args.server == True):
             if(check_port(args.port) and check_IP(args.bind)):
-                createServer(args.bind, args.port, args.reliability)
+                createServer(args.reliability)
 else:
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
