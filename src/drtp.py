@@ -13,6 +13,7 @@ import inspect # Brukt for å få informasjon om objekt i koden. https://docs.py
 import os #Used to see if the file name given is valid (exists and is accessible)
 import random
 import time
+import select
 window = 64000 #Window is always 64000, declaring it as a global variable at the start of the code.
 
 #The following 3 functions are user argument checks
@@ -402,7 +403,10 @@ def serverSR(serverSocket, seqNum, listOfData):
     bufferData = []
     checkSeqNum = seqNum
     ackNum=seqNum
+    indexControl = 0
     while True:
+        #Sjekke for om det er noen pakker som venter i kø på recvfrom og at bufferdata ikke er tom. Hvis det ikke er noen pakker i kø -> sende ack på de vi har motatt
+        #select.select()?
         message, clientAddress = serverSocket.recvfrom(1472)
         header_from_msg = message[:12]
         seq, acknum, flags, win = header.parse_header(header_from_msg)
@@ -412,27 +416,34 @@ def serverSR(serverSocket, seqNum, listOfData):
             print(f"chcechSeqNum: {checkSeqNum}")
             print(f"seq: {seq}")
             if checkSeqNum == seq:
-                bufferData.append(message[12:])
-                checkSeqNum += 1
+                bufferData.insert((seq, message[12:]), indexControl)
+                if(len(bufferData) == 1):
+                    checkSeqNum += 1
+                else:
+                    for k in len(bufferData):
+                        if(bufferData[k][0] == checkSeqNum):
+                            if(bufferData[k+1][0] == checkSeqNum + 1):
+                                checkSeqNum += 1
+                                indexControl += 1
+               
+
                 if(len(bufferData) == 5):
                     print("Bufferdata er lik 5")
                     for i in bufferData:
                         listOfData.append(i)
                     bufferData.clear()
-                    seqNum += 5
+                    seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the 5 acks to the client
                         print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
-                        data = b''
-                        sequence_number = 0
-                        acknowledgment_number = ackNum
-                        flags = 4
-                        
-                        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-                        serverSocket.sendto(msg, clientAddress)
+                        sendAck(ackNum, serverSocket, clientAddress)
                         ackNum+=1
             else: #Går inn i else hvis det er feil rekkefølge og sender på nytt
                 print("Kommer inn i else i SR,det vil si at de ikke ble send i riktig rekkefølge ")
+
+                bufferData.append((seq, message[12:]))
+                bufferData.sort()
+
                 flags = 4
                 ackNum= checkSeqNum
                 sequence_number = seqNum
@@ -440,6 +451,8 @@ def serverSR(serverSocket, seqNum, listOfData):
                 data = b''
                 packet  = header.create_packet(sequence_number, acknowledgment_number,flags,window,data)
                 serverSocket.sendto(packet,clientAddress)
+                
+
                 #må sjekke for ack også, noe jeg ikk
         else:
             print("Kommer inn i avslutningsfasen i server for SR metode")
