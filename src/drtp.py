@@ -340,29 +340,13 @@ def serverSR(serverSocket, seqNum, recivedData):
 
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed. 
     listOfData = [] #TODO: I am not sure if we use this function anywhere?
-    name, fileType = fileForTransfer.split(".")
-    if(fileType == "jpg" or fileType == "jpeg" or fileType == "png"):
-        fileType = "picture"
-    else:
-        #Its a textfile, and should be sent as a textfile to recreate it properly
-        fileType = "text"
-
-    if(fileType == "picture"):
-        #Read as binary = "rb":
-        with open(fileForTransfer, "rb") as file:
-            while True:
-                data = file.read(1460)
-                if not data:
-                    break
-                listOfData.append(data)   
-    else:
-        #default is to read a file as text:
-        with open(fileForTransfer, encoding='utf-8') as file:
-            while True:
-                data = file.read(1460)
-                if not data:
-                    break
-                listOfData.append(data.encode())
+    #Read as binary = "rb":
+    with open(fileForTransfer, "rb") as file:
+        while True:
+            data = file.read(1460)
+            if not data:
+                break
+            listOfData.append(data)   
     return listOfData
         
 
@@ -376,15 +360,13 @@ def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data re
         fileType = "text"
 
     if(fileType == "text"):
-        with open(outputFileName,"w") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
-                dataSequence = data.decode()
-                outputFile.write(dataSequence)
+                outputFile.write(data)
     else:
-        print(fileToBeUnpacked[0][1])
         print(f"Length of file: {len(fileToBeUnpacked)}")
         #The file is a picture, it needs to be given binary digits
-        with open(outputFileName,"xb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
                 if(data is not int):
                     outputFile.write(data)
