@@ -1,9 +1,3 @@
-#I denne filen skal vi ha nødvendig kode for server og client + DRTP (men ikke header, den er i en egen fil)
-#Flags:
-#-f -> filename?
-#-r -> hvilken metode client skal sende på i DRTP
-#-t -> Forskjell mellom client og server: Skipack er servermetode, loss er clientmetode ?
-
 #TODO: Pass på at funksjonar står i ei logisk rekkjefølge
 #TODO: Fjern (og fiks, ikkje fjern utan å fikse :P) alle TODO-meldingar
 #TODO: Remove exmpales from header.py (At the very end).
@@ -13,6 +7,8 @@
 #TODO: Remove prints (clean output)
 #TODO: Bonus tasks
 #TODO: Testing in mininet
+#TODO: Comment code
+#TODO: Make sure you save the output file.
 
 from socket import timeout
 import header
@@ -24,7 +20,6 @@ import inspect # Brukt for å få informasjon om objekt i koden. https://docs.py
 import os #Used to see if the file name given is valid (exists and is accessible)
 import random
 import time
-import select
 
 window = 64000 #Window is always 64000, declaring it as a global variable at the start of the code.
 
@@ -157,7 +152,7 @@ def stop_and_wait(clientSocket, serverConnection, seq_num): #Stop and wait metho
     i = 0
     while i < len(PackedFile):
         print("sender data i StopAndWait metoden")
-        sendingPacket(seq_num,PackedFile[i], clientSocket,serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
+        sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
         try:
             ack, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
         except:
@@ -192,6 +187,7 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 syn, ack, fin = header.parse_flags(flags)
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
             except: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
+                #TODO: Exception should not be generic, but a timeout exception
                 print("Breaker ut av reciving packets")
                 break
 
@@ -202,7 +198,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
     return seq_num
 
 def selectiveRepeat(clientSocket, serverConnection, seq_num):
-
     i = 0
     print(f" lengde av listofData: {len(PackedFile)}")
     toBeRetransmitted = [] #A list which will be used to know which data needs to be retransmitted. Data is retransmitted if no ack is recieved.
@@ -228,7 +223,7 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
         seq_num += args.windowSize #increasing seq num by window size
     return seq_num #Returning the seq num
 
-def serverSR(serverSocket, seqNum, listOfData):
+def serverSR(serverSocket, seqNum, recivedData):
     nestedBufferList = [] #In this nested list, we store the data recieved from the server. 
     nextSeq = seqNum #The next seq.number we are waiting for
     i=0
@@ -239,28 +234,29 @@ def serverSR(serverSocket, seqNum, listOfData):
         syn, ack, fin = header.parse_flags(flags) #Getting information from the header
         sendAck(seq, serverSocket, clientSocket) #Sending an ack to the client for the recieved package. The ack is equal to the seq for the package recieved
         if flags == 0: #If flags = 0, this is a normal package containing data.
-            if seq == nextSeq: #Is the seq number recieved the right one? If yes, append to listOfData. If not, append to bufferdata.
-                listOfData.append(message)
+            if seq == nextSeq: #Is the seq number recieved the right one? If yes, append to recivedData. If not, append to bufferdata.
+                recivedData.append(message)
                 nextSeq += 1 #The next seq we need is one higher
-                while i < len(nestedBufferList): #Looping through the bufferdata to see if any of the buffered data can be added. We always do this when we add data to listOfData
+                while i < len(nestedBufferList): #Looping through the bufferdata to see if any of the buffered data can be added. We always do this when we add data to recivedData
                     if nestedBufferList[i][0] == nextSeq: #Does the bufferlist contain the next value which should be stored?
-                        listOfData.append(nestedBufferList.pop(i)[0]) #If yes, we store it and remove it from nestedBufferList
+                        recivedData.append(nestedBufferList.pop(i)[0]) #If yes, we store it and remove it from nestedBufferList
                         nextSeq += 1 #The next seq number we want is one higher
                         i = 0 #If data is added, we completely loop through once more to see if any new data can be added. Do this by setting i to 0.
                     else:
-                        i += 1 #Incrementing i if no data is added to the listOfData
+                        i += 1 #Incrementing i if no data is added to the recivedData
                 i = 0
             elif seq not in nestedBufferList: #If the recieved message is not already in the list of recieved data, we append it. Since acks can be lost, we need to add a check before adding.
                 nestedBufferList.append([seq, message])
         else: #We're done, finishing the code. 
-            print(len(listOfData)) #TODO: remove. Checking that the length of listOfData is correct
+            print(f"This is the length of the dataArray: {len(recivedData)}") #TODO: remove. Checking that the length of recivedData is correct
             finish = CheckForFinish(fin, ack, serverSocket, clientSocket) #TODO: Me har brukt mykje clientAdress og ClientSOcket om kvarandre, burde konsekvent bruke ein av delene.
             if finish:
                 #TODO: Her må vi liste ut alt dataen vi har fått inn ...! TODO
-                break
+                return recivedData
 
-def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
-    listOfData = []
+def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed. 
+    listOfData = [] #TODO: I am not sure if we use this function anywhere?
+
     with open(fileForTransfer, "rb") as file:
        while True:
            data = file.read(1460)
@@ -269,11 +265,28 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
            listOfData.append(data)
     return listOfData
 
-def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data recieved by the server. 
+def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data recieved by the server. TODO is not being called???
     print(fileToBeUnpacked) # liste med data mottatt av serveren
-    with open(outputFileName,"wb")as outputFIle: # outputFileName er den nye filen,"wb" betyr at filen skal åpnes i binær modus
-        for data in fileToBeUnpacked:
-            outputFIle.write(data)
+     # example of code here: https://www.w3schools.com/python/python_file_write.asp
+
+    name, fileType = outputFileName.split(".")
+    if(fileType == "jpg" or fileType == "jpeg" or fileType == "png"):
+        fileType = "picture"
+    else:
+        #Its a textfile, and should be sent as a textfile to recreate it properly
+        fileType = "text"
+
+    if(fileType == "text"):
+        with open(outputFileName,"x") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+            for data in fileToBeUnpacked:
+                dataSequence = (str) (data[1].decode())
+                outputFIle.write(dataSequence)
+    else:
+        #The file is a picture, it needs to be given binary digits
+        with open(outputFileName,"x") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+            for data in fileToBeUnpacked:
+                dataSequence = (int) (data[1])
+                outputFIle.write(dataSequence)
 
 def createServer():
     print("Her opprettes server:")
@@ -282,30 +295,37 @@ def createServer():
     print('The server is ready to receive')
 
     seqNum = (int) (handshakeServer(serverSocket))
-    listOfData = [] #All 3 methods use an empty array
-    
-    if(args.reliability == "SAW"):
-        serverSaw(serverSocket, seqNum, listOfData)
-    elif(args.reliability == "GBN"):
-        serverGBN(serverSocket, seqNum, listOfData)                     
-    else:
-        serverSR(serverSocket, seqNum, listOfData)
+    recievedData = [] #All 3 methods use an empty array
 
-def serverSaw(serverSocket, seqNum, listOfData):
+    if(args.reliability == "SAW"):
+        recievedData = serverSaw(serverSocket, seqNum, recievedData)
+    elif(args.reliability == "GBN"):
+        recievedData = serverGBN(serverSocket, seqNum, recievedData)                     
+    else:
+        recievedData = serverSR(serverSocket, seqNum, recievedData)
+    
+    #We have recived the whole file of the transfer, now we must unpack it, but only if the user gave the newfile a name to the server:
+    if(args.newFile):
+        UnpackFile(recievedData, args.newFile)
+    else:
+        print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE CREATED")
+
+def serverSaw(serverSocket, seqNum, recievedData):
     while True:
         message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
         header_from_msg = message[:12] #Getting the header
         seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
         ack=seq
         if(flags == 0):
-            listOfData.append((seq ,message[12:]))
+            recievedData.append((seq ,message[12:]))
             sendAck(ack, serverSocket, clientSocket)
-        elif(flags != 0 and listOfData): # Remove this when the rest of the code works :) We need a fin function!!!
+        elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
             finish = CheckForFinish(fin, ack, serverSocket, clientSocket)
             if finish:
             #Her må vi liste ut alt dataen vi har fått inn ...!
                 break
+    return recievedData
 
 def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a function to send acks to client. Function will randomly skip sending acks if the -t skipack flag is used 
     data = b''
@@ -327,7 +347,7 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection): #Creating a fu
      else:
          clientSocket.sendto(packet, serverConnection)
 
-def serverGBN(serverSocket, seqNum, listOfData): #Server go back N method
+def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method 
     bufferData = []
     checkSeqNum = seqNum
     ackNum = seqNum
@@ -346,32 +366,34 @@ def serverGBN(serverSocket, seqNum, listOfData): #Server go back N method
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
                     print("Bufferdata er lik n")
                     for i in bufferData:  #Add all data to the storage
-                        listOfData.append(i)
+                        recivedData.append(i)
                     bufferData.clear() #Clear the buffer to make space for new data
                     seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
-                        data = b''
-                        sequence_number = 0
-                        acknowledgment_number = ackNum
-                        flags = 4
-                        msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)   
-                        serverSocket.sendto(msg, clientAddress)
+                        sendAck(ackNum, serverSocket, clientAddress)
                         ackNum+=1
-            else:
+            elif(seq < checkSeqNum):
+                ackNum -= args.windowSize
+                for i in range(args.windowSize): #Sending the amount of packet acks to the client
+                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
+                        sendAck(ackNum, serverSocket, clientAddress)
+                        ackNum+=1       
+            else: #Clearing the bufferdata.
                 print("Kommer inn i else i GBN")
                 checkSeqNum = seqNum
                 bufferData.clear()
         else:
-            print("Kommer inn i avslutningsfasen i server for SR metode")
+            print("Kommer inn i avslutningsfasen i server for GBN metode")
             finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
             if finish:
+                print(f"Størrelsen på dataArrayet er: {len(recivedData)}")
                 #Her må vi liste ut alt dataen vi har fått inn ...! TODO
-                break
+                return recivedData
+    
 
 def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
-   
     if fin == 2:
         print("First FIN recieved successfully at server from client!")
         acknowledgment_number = 0
@@ -396,6 +418,7 @@ parser = argparse.ArgumentParser(description='The arguments used when calling th
 #server arguments
 parser.add_argument("-s", "--server", help="try to type '-s", action="store_true")
 parser.add_argument("-b", "--bind", help="define an ip-address for the clients to connect to the host", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
+parser.add_argument("-F", "--newFile", help="Write the name of the new file and type to create from transmission", type=str)
 #client arguments
 parser.add_argument("-c", "--client", help="try to type '-c", action="store_true")
 parser.add_argument("-I", "--serverip", help="Write the IP-address of the server to connect", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
