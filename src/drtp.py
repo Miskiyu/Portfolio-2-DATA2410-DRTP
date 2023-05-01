@@ -283,10 +283,9 @@ def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data re
                 outputFIle.write(dataSequence)
     else:
         #The file is a picture, it needs to be given binary digits
-        with open(outputFileName,"x") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"xb") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
-                dataSequence = (int) (data[1])
-                outputFIle.write(dataSequence)
+                outputFIle.write(data[1])
 
 def createServer():
     print("Her opprettes server:")
