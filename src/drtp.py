@@ -9,9 +9,11 @@
 #TODO: Testing in mininet
 #TODO: Comment code
 #TODO: Make sure you save the output file.
+#TODO: Readme should tell how to run the code. Remeber to include the fact that server needs to give the name to save the file as. 
+#TODO: Make sure all comments are in english
 
 from socket import timeout
-import header
+import header 
 import argparse
 import socket
 import sys
@@ -35,41 +37,58 @@ def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from
             raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
     return ip_address
 
+#Function to validate the port number
 def check_port(port): #Code to check that the port is written is valid. Inspired from the starter code for portfolio 1. 
+    # Try to convert tin input ta an  integer
     try:
         value = int(port)
     except ValueError:
         raise argparse.ArgumentTypeError("Expected an integer but you entered a " + str(type(port))) #Need to convert type(val) to string to append to the string.
+    #Check if the port number is within the valid range
     if (value<1024 or value >65535):
         raise Exception("The port number is not valid, please choose a port number from 1024 to 65535")
     return value
-
+# Function to check if the file is valid (exists and is accessible)
+# If the file exists, return the file name
 def check_file(file):
     if os.path.exists(file):
         return file
+    # If the file does not exist, print an error message and exit the program
     else:
         print(f"The file {file} is not valid. Make sure you gave the correct path from the current dictionary")
         sys.exit()
 
 #Handshake functions:
 def handshakeServer(serverSocket):
+    # Loop until the handshake process is complete
     while True:
+        # Receive a message from the client
         message, (args.ip, args.port) = serverSocket.recvfrom(12)
-
+        #Initialize sequence and acknowlegement numbers and data
         sequence_number = 0
         acknowledgment_number = 0
         data = b'0' * 0
-
+        # Extract the first 12 bytes of the recieved message
         data_from_msg = message[:12]
+
+        #Parse the header of the received message
         seq, acknum, flags, win = header.parse_header(data_from_msg)
 
+        # Print the extracted sequence number, acknowledgment number, and flags
         print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")
+
+        # Check if this is the first SYN message from the client
         if seq == 1 and acknum == 0 and flags == 8:
             print("First syn recieved successfully at server from client!")
+
+             # Update acknowledgment number, sequence number, and flags for the SYN-ACK response
             acknowledgment_number = 1
             seqNum = 2
             flags = 12
+            # Create the SYN-ACK response packet
             msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
+
+             # Send the SYN-ACK response to the client
             serverSocket.sendto(msg, (args.ip, args.port))
 
         print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
@@ -276,18 +295,18 @@ def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data re
         fileType = "text"
 
     if(fileType == "text"):
-        with open(outputFileName,"x") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"x") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
-                dataSequence = (str) (data[1].decode())
-                outputFIle.write(dataSequence)
+                dataSequence = (str) (data.decode())
+                outputFile.write(dataSequence)
     else:
         print(fileToBeUnpacked[0][1])
         print(f"Length of file: {len(fileToBeUnpacked)}")
         #The file is a picture, it needs to be given binary digits
-        with open(outputFileName,"xb") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"xb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
-                if(data[1] is not int):
-                    outputFIle.write(data[1])
+                if(data is not int):
+                    outputFile.write(data)
                 else:
                     print("emptey packets not implemented")
 
@@ -311,7 +330,7 @@ def createServer():
     if(args.newFile):
         UnpackFile(recievedData, args.newFile)
     else:
-        print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE CREATED")
+        print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE CREATED") #TODO: Move the test to the start of the code
 
 def serverSaw(serverSocket, seqNum, recievedData):
     while True:
@@ -320,7 +339,7 @@ def serverSaw(serverSocket, seqNum, recievedData):
         seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
         ack=seq
         if(flags == 0):
-            recievedData.append((seq ,message[12:]))
+            recievedData.append(message[12:])
             sendAck(ack, serverSocket, clientSocket)
         elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
@@ -360,45 +379,45 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
         seq, acknum, flags, win = header.parse_header(header_from_msg)
         syn, ack, fin = header.parse_flags(flags)
         if(flags == 0):
-            print("Henter ut melding der flagg er 0")
-            print(f"chcechSeqNum: {checkSeqNum}")
-            print(f"seq: {seq}")
+            print("Henter ut melding der flagg er 0") #TODO: Remove unneeded prints
+            print(f"chcechSeqNum: {checkSeqNum}") #TODO: Remove unneeded prints
+            print(f"seq: {seq}") #TODO: Remove unneeded prints
             if checkSeqNum == seq:
                 bufferData.append(message[12:])
                 checkSeqNum += 1
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
-                    print("Bufferdata er lik n")
-                    for i in bufferData:  
+                    print("Bufferdata er lik n") #TODO: Remove unneeded prints
+                    for i in bufferData:   
                         recivedData.append(i) #Add all data to the storage
                     bufferData.clear() #Clear the buffer to make space for new data
                     seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
-                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
-                        sendAck(ackNum, serverSocket, clientAddress)
+                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!") #TODO: Remove unneeded prints
+                        sendAck(ackNum, serverSocket, clientAddress) 
                         ackNum+=1
             elif(seq < checkSeqNum):
                 ackNum -= args.windowSize
                 for i in range(args.windowSize): #Sending the amount of packet acks to the client
-                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!")
+                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!") #TODO: Remove unneeded prints
                         sendAck(ackNum, serverSocket, clientAddress)
                         ackNum+=1       
             else: #Clearing the bufferdata.
-                print("Kommer inn i else i GBN")
+                print("Kommer inn i else i GBN") #TODO: Remove unneeded prints
                 checkSeqNum = seqNum
                 bufferData.clear()
         else:
-            print("Kommer inn i avslutningsfasen i server for GBN metode")
+            print("Kommer inn i avslutningsfasen i server for GBN metode") #TODO: Remove unneeded prints
             finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
             if finish:
-                print(f"Størrelsen på dataArrayet er: {len(recivedData)}")
+                print(f"Størrelsen på dataArrayet er: {len(recivedData)}") #TODO: Remove unneeded prints
                 #Her må vi liste ut alt dataen vi har fått inn ...! TODO
                 return recivedData
     
 
 def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
     if fin == 2:
-        print("First FIN recieved successfully at server from client!")
+        print("First FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
         acknowledgment_number = 0
         flags = 6
         data= b''
@@ -406,7 +425,7 @@ def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
         msg = header.create_packet(seq, acknowledgment_number, flags, window, data)
         serverSocket.sendto(msg, clientSocket) #Sending first ack
     elif ack == 4: # Ack for the first FIN is received
-        print("Second FIN recieved successfully at server from client!")
+        print("Second FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
         #TODO Her må vi liste ut alt dataen vi har fått inn ...!
         return True # indicate finish
     return False    #  if neither the first nor second FIN siganl, return false, so the communication is not finished    
