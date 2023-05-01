@@ -368,13 +368,9 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                 checkSeqNum += 1
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
                     print("Bufferdata er lik n")
-                    getElementsInrightOrder = []
                     for i in bufferData:  
-                        getElementsInrightOrder.append(i)
-                    for j in getElementsInrightOrder:
-                        recivedData.append(j) #Add all data to the storage
+                        recivedData.append(i) #Add all data to the storage
                     bufferData.clear() #Clear the buffer to make space for new data
-                    getElementsInrightOrder.clear()
                     seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
