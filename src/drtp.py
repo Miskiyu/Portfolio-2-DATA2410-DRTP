@@ -266,7 +266,6 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
     return listOfData
 
 def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data recieved by the server. TODO is not being called???
-    print(fileToBeUnpacked) # liste med data mottatt av serveren
      # example of code here: https://www.w3schools.com/python/python_file_write.asp
 
     name, fileType = outputFileName.split(".")
@@ -282,10 +281,15 @@ def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data re
                 dataSequence = (str) (data[1].decode())
                 outputFIle.write(dataSequence)
     else:
+        print(fileToBeUnpacked[0][1])
+        print(f"Length of file: {len(fileToBeUnpacked)}")
         #The file is a picture, it needs to be given binary digits
         with open(outputFileName,"xb") as outputFIle: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
             for data in fileToBeUnpacked:
-                outputFIle.write(data[1])
+                if(data[1] is not int):
+                    outputFIle.write(data[1])
+                else:
+                    print("emptey packets not implemented")
 
 def createServer():
     print("Her opprettes server:")
@@ -323,8 +327,8 @@ def serverSaw(serverSocket, seqNum, recievedData):
             finish = CheckForFinish(fin, ack, serverSocket, clientSocket)
             if finish:
             #Her må vi liste ut alt dataen vi har fått inn ...!
-                break
-    return recievedData
+                return recievedData
+    
 
 def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a function to send acks to client. Function will randomly skip sending acks if the -t skipack flag is used 
     data = b''
@@ -364,9 +368,13 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                 checkSeqNum += 1
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
                     print("Bufferdata er lik n")
-                    for i in bufferData:  #Add all data to the storage
-                        recivedData.append(i)
+                    getElementsInrightOrder = []
+                    for i in bufferData:  
+                        getElementsInrightOrder.append(i)
+                    for j in getElementsInrightOrder:
+                        recivedData.append(j) #Add all data to the storage
                     bufferData.clear() #Clear the buffer to make space for new data
+                    getElementsInrightOrder.clear()
                     seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
