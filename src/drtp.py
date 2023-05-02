@@ -511,14 +511,18 @@ if args.client == True or args.server == True:
         print("You have to use either the -s (server) og -c (client) flag, not both")
         sys.exit()
     else:
-        if args.client == True:
-            socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
-            PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
-            createClient(args.serverip, args.port, args.reliability, args.file)
-        if(args.server == True and args.newFile == True):
-            createServer()
-        else:
-            print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE TRANSMITTED AND CREATED AT RECIVEING END")
+        if(args.client == True):
+            if(args.file == True):
+                socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
+                PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
+                createClient(args.serverip, args.port, args.reliability, args.file)
+            else:
+                print("WHEN YOU CREATE A CLIENT, YOU ALSO NEED TO DEFINE A FILE TO TRANSFER TO SERVER")
+        if(args.server == True):
+            if(args.newFile == True):
+                createServer()
+            else:
+                print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE TRANSMITTED AND CREATED AT RECIVEING END")
 else:    
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
