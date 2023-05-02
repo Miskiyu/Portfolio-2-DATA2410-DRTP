@@ -352,29 +352,16 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
     return listOfData
         
 
-def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data recieved by the server. TODO is not being called???
+def UnpackFile(fileToBeUnpacked,outputFileName):
      # example of code here: https://www.w3schools.com/python/python_file_write.asp
-    name, fileType = outputFileName.split(".")
-    if(fileType == "jpg" or fileType == "jpeg" or fileType == "png"):
-        fileType = "picture"
-    else:
-        #Its a textfile, and should be sent as a textfile to recreate it properly
-        fileType = "text"
+    print(f"Length of file: {len(fileToBeUnpacked)}")
 
-    if(fileType == "text"):
-        with open(outputFileName,"wb") as outputFile:
-            for data in fileToBeUnpacked:
-                outputFile.write(data)
-    else:
-        print(f"Length of file: {len(fileToBeUnpacked)}")
-        #The file is a picture, it needs to be given binary digits
-        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"wb" betyr at det skal lages en ny fil, og at dataen skal sees på som binær.
-            for data in fileToBeUnpacked:
-                print(data)
-                if(data is not int):
-                    outputFile.write(data)
-                else:
-                    print("emptey packets not implemented")
+    # outputFileName is the new file,"wb" means that a new file is to be written, and the data should be treatet as binary.
+    with open(outputFileName,"wb") as outputFile: 
+        for data in fileToBeUnpacked:
+            print(data)
+            outputFile.write(data)
+            
 
 def createServer():
     print("Her opprettes server:")
