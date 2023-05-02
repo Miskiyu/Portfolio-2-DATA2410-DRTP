@@ -5,7 +5,7 @@ DRTP is a simple transport protocol that provides reliable data delivery on top 
 
 How to use the application
 --------------------------
-The transfer application can be run in either server mode or client mode. Each mode has flasgs that can be used. If you dont specify any flags, the applicaiton will use default values.
+The transfer application can be run in either server mode or client mode. we have implement various flags,  Each mode has different flasgs that can be used. We have implemetet three reliability functions, named STP,GBN and SP. 
 
 
 ## Server mode ##

@@ -517,12 +517,12 @@ if args.client == True or args.server == True:
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient(args.serverip, args.port, args.reliability, args.file)
             else:
-                print("WHEN YOU CREATE A CLIENT, YOU ALSO NEED TO DEFINE A FILE TO TRANSFER TO SERVER")
+                print("When you create a client, you also need to define which file to transfer to the server")
         if(args.server == True):
             if(args.newFile):
                 createServer()
             else:
-                print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE TRANSMITTED AND CREATED AT RECIVEING END")
-else:    
+                print("A new filename for the recieved file must be")
+else:
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
