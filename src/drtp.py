@@ -349,19 +349,15 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
         
 #This method takes in the array containing the recived data from the client and the filename specified by the user 
 def UnpackFile(fileToBeUnpacked,outputFileName):
-    print(f"Length of file: {len(fileToBeUnpacked)}")
-
     # outputFileName is the new file,"wb" means that a new file is to be written, and the data should be treatet as binary.
     with open(outputFileName,"wb") as outputFile: 
         for data in fileToBeUnpacked:
-            print(data)
             outputFile.write(data)
             
 #This function creates a server and watis for a connection form client
 #Once the connections is established, it uses reliability function to recevie and extrac the file data sent by the client.  
 #It then extracts the file data and stores it in a the server
 def createServer():
-    print("Her opprettes server:")
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     serverSocket.bind((args.bind, args.port))
     print('The server is ready to receive')
