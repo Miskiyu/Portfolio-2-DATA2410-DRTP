@@ -1,11 +1,12 @@
 Reliable Transport Protocol (DRTP) 
 ----------------------------------
 
-DRTP is a simple transport protocol that provides reliable data delivery on top of UDP. DRTP wil ensure thata is reliably delivered in order whitout missing data. We have implemetet two programs DRTP and simple file transfer client and server  
+
+DRTP is a simple transport protocol that provides reliable data delivery on top of UDP. DRTP wil ensure thata is reliably delivered in order whitout missing data.
 
 How to use the application
 --------------------------
-The transfer application can be run in either server mode or client mode. We have implement various flags for client and server.To run the applicatino you have invoke server and then the client, you can not invoke the server and client at the same time.Make sure you have the path to a file you want to send. 
+The transfer application can be run in either server mode or client mode. We have implement various flags for client and server. To run the applicatino you have to invoke the server and then the client, you can not invoke the server and client at the same time. You must run with the flags spesificed below. 
 
 ## Server mode ##
 The server can be invoked with 
@@ -17,7 +18,7 @@ Other command-line options:
     -r, --reliable        reliability functions (STP,GBN or SP)
     -t, --testcase        to skip ack to trigger retransmission 
     -F, --newFile         Write the name of the new file 
-    -w, --windowSize      Select the windowsize for the transmission of packets
+    -w, --windowSize      Select the windowsize for the transmission of packets. Default = 64 000
 
 
 ## Client mode ##
@@ -35,7 +36,7 @@ Other command-line options:
 Reliablity functions
 --------------------
 Three reliability function was implemented and user will be able to choose them from the command line argument using -r. The three functions are:
-* stop and wait protocol(STP): STP send one packet at time and next packet i sent only when the seer receives an ackowledment(ACK). If the sender doesnt receive an ACK within a set period then it resends the packet. 
+* stop and wait protocol(STP): STP send one packet at time and the next packet is sent only when the sender receives an ackowledment(ACK). If the sender doesnt receive an ACK within a set period then it resends the packet. 
 
 * go-back-n (GBN): Sends 5, 10 or 15 packets. If acks are not recieved for all packets, all packets will be retransmitted. Server will only save the recieved packets if all packets are recieve and 
 

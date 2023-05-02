@@ -142,6 +142,8 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
 # Define the function to transmit data and listen for responses from the server
 def transmittAndListen(clientSocket, serverConnection, seqNum): #Client 
     
+
+    t0 = time.time()
      # Choose the reliability method based on the user argument and call the respective function
     if(args.reliability == "SAW"):
         seqNum = (int) (stop_and_wait(clientSocket, serverConnection, seqNum))
@@ -149,7 +151,7 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
         seqNum = (int) (goBackN(clientSocket, serverConnection, seqNum))
     else:
         seqNum=(int) (selectiveRepeat(clientSocket, serverConnection, seqNum))
-
+    t_end = time.time() - t0
     #Going into Finish-mode:
     print("Going into Finish-mode at client")
     while True:
@@ -193,7 +195,17 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
             clientSocket.sendto(msg, serverConnection)
             print("We are done at client side, finishing")
             break
-    #Close the client socket    
+    #Close the client socket
+
+    
+    size = os.path.getsize(args.file)/1000000
+    interval_string = "0.0 - " + str(round(t_end,2))
+    throughput = size*8/t_end
+    headline = ["{:<8}".format("ID"), "{:<11}".format("Interval"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
+    output = [["{:<8}".format(str(args.port)), "{:<11}".format(interval_string), "{:<15}".format(str(size) + " MB"), "{:<11}".format(throughput) + " Mbps"]]
+
+    print(headline)
+    print(output)
     print("Closing socket")
     clientSocket.close()
 
@@ -345,7 +357,9 @@ def UnpackFile(fileToBeUnpacked,outputFileName):
             print(data)
             outputFile.write(data)
             
-
+#This function creates a server and watis for a connection form client
+#Once the connections is established, it uses reliability function to recevie and extrac the file data sent by the client.  
+#It then extracts the file data and stores it in a the server
 def createServer():
     print("Her opprettes server:")
     serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -444,7 +458,6 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
             finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
             if finish:
                 return recivedData
-    
 
 def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
     if fin == 2:
@@ -460,8 +473,10 @@ def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
         return True # indicate finish
     return False    #  if neither the first nor second FIN siganl, return false, so the communication is not finished    
 
+#This method takes in arguments passed in by the user. The defined IP to the serverm the serverport, which reliability method and what file the user wants to transfer.
 def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
+    #Creating a udp socket for the client
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     handshakeClient(clientSocket, serverip, port, method, fileForTransfer) #Sending a packet with the syn flag to the server, if an ack is recieved transmission of data starts.
     
