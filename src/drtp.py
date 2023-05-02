@@ -1,6 +1,6 @@
 #TODO: Pass på at funksjonar står i ei logisk rekkjefølge
 #TODO: Fjern (og fiks, ikkje fjern utan å fikse :P) alle TODO-meldingar
-#TODO: Remove exmpales from header.py (At the very end).
+#TODO: Remove examples from header.py (At the very end).
 #TODO: Make sure Loss and skipack are implemented for all functions
 #TODO: Make sure only socket errors are caught when using methods that need the socekts error things. We don't wan't other errors to pass. 
 #TODO: The finishing message repeats 3 times at the server side, that's not cool.
@@ -9,7 +9,6 @@
 #TODO: Testing in mininet
 #TODO: Comment code
 #TODO: Make sure you save the output file.
-#TODO: Readme should tell how to run the code. Remeber to include the fact that server needs to give the name to save the file as. 
 #TODO: Make sure all comments are in english
 
 from socket import timeout
@@ -110,31 +109,15 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
     flags = 8
     data = b'0' * 0
 
-    # Create the SYN message packet
-    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-
-    # Send the SYN message to the server
-    clientSocket.sendto(msg, (serverip, port))
-    
-     # Receive a response from the server
-    modifiedMessage, serverConnection = clientSocket.recvfrom(12)
-    
-     # Extract the first 12 bytes of the received message
-    data_from_msg = modifiedMessage[:12]
-
-    # Parse the header of the received message
+    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data) # Create the SYN message packet
+    clientSocket.sendto(msg, (serverip, port)) # Send the SYN message to the server 
+    modifiedMessage, serverConnection = clientSocket.recvfrom(12) # Receive a response from the server
+    data_from_msg = modifiedMessage[:12]# Extract the first 12 bytes of the received message
     seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+    syn, ack, fin = header.parse_flags(flags) # Parse the flags from the received message
 
-    # Parse the flags from the received message
-    syn, ack, fin = header.parse_flags(flags)
-
-     # Print the received SYN and ACK flags
-    print(f"Dette er syn og ack:  {syn}, {ack}")
-
-    # Check if the received message is a SYN-ACK message
-    if syn and ack != 0 and acknum == 1:
-        print("The ack from Server was recieved at Client!!")
-        
+    if syn and ack != 0 and acknum == 1: # Check if the received message is a SYN-ACK message
+        print("The ack from Server was recieved at Client!!")        
          # Update sequence and acknowledgment numbers, and flags for the final ACK message
         sequence_number = 0
         acknowledgment_number = 1
@@ -340,8 +323,9 @@ def serverSR(serverSocket, seqNum, recivedData):
                 #TODO: Her må vi liste ut alt dataen vi har fått inn ...! TODO
                 return recivedData
 
+#This method takes in the filename specified by the user in the parameter. It chops the file into chunkcs/packets of 1460 bytes and add them into an array. The array is returned to the clients sending method
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed. 
-    listOfData = [] #TODO: I am not sure if we use this function anywhere?
+    listOfData = [] 
     #Read as binary = "rb":
     with open(fileForTransfer, "rb") as file:
         while True:
@@ -351,9 +335,8 @@ def PackFile(fileForTransfer): #This function packs the file we want to transfer
             listOfData.append(data)   
     return listOfData
         
-
+#This method takes in the array containing the recived data from the client and the filename specified by the user 
 def UnpackFile(fileToBeUnpacked,outputFileName):
-     # example of code here: https://www.w3schools.com/python/python_file_write.asp
     print(f"Length of file: {len(fileToBeUnpacked)}")
 
     # outputFileName is the new file,"wb" means that a new file is to be written, and the data should be treatet as binary.
@@ -436,14 +419,12 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                 bufferData.append(message[12:])
                 checkSeqNum += 1
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
-                    print("Bufferdata er lik n") #TODO: Remove unneeded prints
                     for i in bufferData:   
                         recivedData.append(i) #Add all data to the storage
                     bufferData.clear() #Clear the buffer to make space for new data
                     seqNum += args.windowSize
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
-                        print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!") #TODO: Remove unneeded prints
                         sendAck(ackNum, serverSocket, clientAddress) 
                         ackNum+=1
             elif(seq < checkSeqNum):
@@ -457,15 +438,11 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                         sendAck(ackNum, serverSocket, clientAddress)
                         ackNum+=1       
             else: #Clearing the bufferdata.
-                print("Kommer inn i else i GBN") #TODO: Remove unneeded prints
                 checkSeqNum = seqNum
                 bufferData.clear()
         else:
-            print("Kommer inn i avslutningsfasen i server for GBN metode") #TODO: Remove unneeded prints
             finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
             if finish:
-                print(f"Størrelsen på dataArrayet er: {len(recivedData)}") #TODO: Remove unneeded prints
-                #Her må vi liste ut alt dataen vi har fått inn ...! TODO
                 return recivedData
     
 
@@ -480,7 +457,6 @@ def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
         serverSocket.sendto(msg, clientSocket) #Sending first ack
     elif ack == 4: # Ack for the first FIN is received
         print("Second FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
-        #TODO Her må vi liste ut alt dataen vi har fått inn ...!
         return True # indicate finish
     return False    #  if neither the first nor second FIN siganl, return false, so the communication is not finished    
 
@@ -513,7 +489,7 @@ if args.client == True or args.server == True:
     else:
         if(args.client == True):
             if(args.file):
-                socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
+                socket.setdefaulttimeout(0.5) #Setting socket timeout for the client.
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient(args.serverip, args.port, args.reliability, args.file)
             else:
