@@ -195,7 +195,7 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     time_string = str(round(t_end,2)) #Rounding the time to have to decimal places, and converting from float to string.
     throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
     headline = ["{:<8}".format("ServerID"), "{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
-    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,3)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
+    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
 
     print("") #Adding a line before and after the table to make it easier to read. 
     print("\t".join(headline)) #Printing the header for the output
@@ -420,7 +420,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
         if(flags == 0):  #if flags = 0
             if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData 
                 bufferData.append(message[12:])
-                checkSeqNum += 1
+                checkSeqNum += 1     #oppdate the checkSeqNum
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
                     for i in bufferData:   
                         recivedData.append(i) #Add all data to the storage
@@ -430,7 +430,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         sendAck(ackNum, serverSocket, clientAddress) 
                         ackNum+=1
-            elif(seq < checkSeqNum):
+            elif(seq < checkSeqNum):   #
                 print(f"ackNum er: {ackNum}")
                 #This check prevents ackNum from growing out of control and keeps the acknumbers correct if an ack was lost in last transmission
                 if(ackNum >= checkSeqNum):
