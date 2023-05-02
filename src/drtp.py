@@ -248,7 +248,9 @@ def goBackN(clientSocket, serverConnection, seq_num):
 
     while i < len(PackedFile): #Sending the packets within this loop. If not divisable by n, we send the remaining n packets as empty packets. 
         ackList = []
+        print(f"Dette er seqnum: {seq_num}")
         for j in range(args.windowSize): #sending the packets
+            print(f"Dette er j: {j}")
             if j + i >= len(PackedFile): #If the packets are not divisable by n, we send empty packets so that the total adds up to n
                 sendingPacket(seq_num + j, b'0' * 0, clientSocket,serverConnection)
             else:
@@ -274,7 +276,7 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 #TODO: Exception should not be generic, but a timeout exception
                 print("Breaker ut av reciving packets")
                 break
-                 
+        print(f"This is acklist: {ackList}")
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
             seq_num += args.windowSize
             i += args.windowSize
@@ -323,7 +325,7 @@ def serverSR(serverSocket, seqNum, recivedData):
                 nextSeq += 1 #The next seq we need is one higher
                 while i < len(nestedBufferList): #Looping through the bufferdata to see if any of the buffered data can be added. We always do this when we add data to recivedData
                     if nestedBufferList[i][0] == nextSeq: #Does the bufferlist contain the next value which should be stored?
-                        recivedData.append(nestedBufferList.pop(i)[0]) #If yes, we store it and remove it from nestedBufferList
+                        recivedData.append(nestedBufferList.pop(i)[1]) #If yes, we store it and remove it from nestedBufferList
                         nextSeq += 1 #The next seq number we want is one higher
                         i = 0 #If data is added, we completely loop through once more to see if any new data can be added. Do this by setting i to 0.
                     else:
@@ -360,14 +362,15 @@ def UnpackFile(fileToBeUnpacked,outputFileName): #This should unpack the data re
         fileType = "text"
 
     if(fileType == "text"):
-        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"wb") as outputFile:
             for data in fileToBeUnpacked:
                 outputFile.write(data)
     else:
         print(f"Length of file: {len(fileToBeUnpacked)}")
         #The file is a picture, it needs to be given binary digits
-        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"x" betyr at det skal lages en ny fil, og hvis navnet er tatt gis det en feilmedling
+        with open(outputFileName,"wb") as outputFile: # outputFileName er den nye filen,"wb" betyr at det skal lages en ny fil, og at dataen skal sees på som binær.
             for data in fileToBeUnpacked:
+                print(data)
                 if(data is not int):
                     outputFile.write(data)
                 else:
@@ -460,7 +463,11 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                         sendAck(ackNum, serverSocket, clientAddress) 
                         ackNum+=1
             elif(seq < checkSeqNum):
-                ackNum -= args.windowSize
+                print(f"ackNum er: {ackNum}")
+                #This check prevents ackNum from growing out of control and keeps the acknumbers correct if an ack was lost in last transmission
+                if(ackNum >= checkSeqNum):
+                    ackNum = checkSeqNum
+                    ackNum -= args.windowSize
                 for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         print(f"We managed to reach line {inspect.currentframe().f_lineno} in the code!") #TODO: Remove unneeded prints
                         sendAck(ackNum, serverSocket, clientAddress)
@@ -521,7 +528,7 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if args.client == True:
-            socket.setdefaulttimeout(0.005) #Setting socket timeout for the client.
+            socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
             PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
             createClient(args.serverip, args.port, args.reliability, args.file)
         if(args.server == True):
