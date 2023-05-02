@@ -3,6 +3,7 @@
 #TODO: Remove examples from header.py (At the very end).
 #TODO: Make sure Loss and skipack are implemented for all functions
 #TODO: Make sure only socket errors are caught when using methods that need the socekts error things. We don't wan't other errors to pass. 
+#In other words: all (or most) try except should 
 #TODO: The finishing message repeats 3 times at the server side, that's not cool.
 #TODO: Remove prints (clean output)
 #TODO: Bonus tasks
@@ -10,6 +11,7 @@
 #TODO: Comment code
 #TODO: Make sure you save the output file.
 #TODO: Make sure all comments are in english
+#TODO: Server should not have to spesify windowsize
 
 from socket import timeout
 import header 
@@ -50,7 +52,7 @@ def check_port(port): #Code to check that the port is written is valid. Inspired
 # Function to check if the file is valid (exists and is accessible)
 # If the file exists, return the file name
 def check_file(file):
-    if os.path.exists(file):
+    if os.path.exists(file): 
         return file
     # If the file does not exist, print an error message and exit the program
     else:
@@ -137,8 +139,6 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
 
 # Define the function to transmit data and listen for responses from the server
 def transmittAndListen(clientSocket, serverConnection, seqNum): #Client 
-    
-
     t0 = time.time()
      # Choose the reliability method based on the user argument and call the respective function
     if(args.reliability == "SAW"):
@@ -192,10 +192,10 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     #Close the client socket
     
     size = os.path.getsize(args.file)/1000000 #Getting the size of the file in MB.
-    time_string = str(round(t_end,2)) #Rounding the time to have to decimal places, and converting from float to string.
+    time_string = str(round(t_end,4)) #Rounding the time to have to decimal places, and converting from float to string.
     throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
-    headline = ["{:<8}".format("ServerID"), "{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
-    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
+    headline = ["{:<8}".format("ServerID"),"{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<8}".format("Timeout"),"{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
+    output = ["{:<8}".format(str(serverConnection[0])),"{:<8}".format(args.reliability),"{:<8}".format(args.windowSize), "{:<8}".format(str(clientSocket.gettimeout())+ " s"), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,4)) + " Mbps")] #Formatting the output
 
     print("") #Adding a line before and after the table to make it easier to read. 
     print("\t".join(headline)) #Printing the header for the output
@@ -360,7 +360,7 @@ def createServer():
     
     UnpackFile(recievedData, args.newFile)  #Unpakc the file 
     
-#This method implemenst the Stop and wait for server. The methos listens to socket for incomming message from the client
+#This method implemenst the Stop and wait for server and it takes three arguments. The method listens to socket for incomming message from the client
 #It waits until a message is received and send acknowledgement message back back to client.
 def serverSaw(serverSocket, seqNum, recievedData):
     while True:
@@ -402,12 +402,9 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection):
      else:
          clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
 
-
 #This a method for a server that use Go-Back-N to recived data from client. 
 #It takes in three parameters:serverSocket,Seqnum and recivedData. 
-#
-
-
+#Then checks if the packes is received in the right order
 def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method 
     bufferData = []  #create an empty list
     checkSeqNum = seqNum  
@@ -420,7 +417,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
         if(flags == 0):  #if flags = 0
             if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData 
                 bufferData.append(message[12:])
-                checkSeqNum += 1     #oppdate the checkSeqNum
+                checkSeqNum += 1     #increase the checkSeqNum
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
                     for i in bufferData:   
                         recivedData.append(i) #Add all data to the storage
@@ -430,7 +427,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         sendAck(ackNum, serverSocket, clientAddress) 
                         ackNum+=1
-            elif(seq < checkSeqNum):   #
+            elif(seq < checkSeqNum):   #if the sequence number is less than expected value 
                 print(f"ackNum er: {ackNum}")
                 #This check prevents ackNum from growing out of control and keeps the acknumbers correct if an ack was lost in last transmission
                 if(ackNum >= checkSeqNum):
@@ -439,15 +436,21 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                 for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         sendAck(ackNum, serverSocket, clientAddress)
                         ackNum+=1       
-            else: #Clearing the bufferdata.
+            else: # if the sequence number is greater than expected value, clear the bufferdata.
                 checkSeqNum = seqNum
                 bufferData.clear()
-        else:
+        else: #If the message is a FIN message
             finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
             if finish:
-                return recivedData
+                return recivedData #Return the receive data
 
-def CheckForFinish(fin,ack,serverSocket,clientSocket):#TODO fiks
+#This method checks for the fin flag in the header of the message. 
+#If the fin=2 flag is received then it sendt ack.
+# if the ack=4 then it indicates the end of communication and True is returned
+#If the neither fin or ack is recevide, FALSE is returned. 
+def CheckForFinish(fin,ack,serverSocket,clientSocket): #TODO: THIS GET'S CALLED 2 TIMES WE HAVE TO FIX IT! 
+    #Safiq MAY see our output, so clean output is important TODO TODO TODO TODO
+    
     if fin == 2:
         print("First FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
         acknowledgment_number = 0
@@ -484,14 +487,17 @@ parser.add_argument("-t", "--testcase", help="Type in if you want to set a type 
 parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or default port 8080 will be set", type=check_port, default=8080)
 parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
 parser.add_argument("-w", "--windowSize", help="Select the windowSize for the transmission of packets",type=int, default=5, choices=[5, 10, 15])
+#parser.add_argument("-T", "--TIMEOUT", help="Select the default timeout",type=check_timeout, default=0.5)
 args = parser.parse_args()
 
-if args.client == True or args.server == True:
+#checks if client or server is invoked. If both server and client is invoked at the same time, it prints out error message. 
+#If only one of the client or server is passed is proceeds to check if additional arguments have been passed 
+if args.client == True or args.server == True:  
     if(args.client == True and args.server == True):
         print("You have to use either the -s (server) og -c (client) flag, not both")
         sys.exit()
     else:
-        if(args.client == True):
+        if(args.client == True):  
             if(args.file):
                 socket.setdefaulttimeout(0.5) #Setting socket timeout for the client.
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
