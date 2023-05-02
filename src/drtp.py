@@ -195,7 +195,7 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     time_string = str(round(t_end,2)) #Rounding the time to have to decimal places, and converting from float to string.
     throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
     headline = ["{:<8}".format("ServerID"), "{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
-    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,2)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
+    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,3)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
 
     print("") #Adding a line before and after the table to make it easier to read. 
     print("\t".join(headline)) #Printing the header for the output
@@ -260,7 +260,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
             except: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 #TODO: Exception should not be generic, but a timeout exception
                 break
-        print(f"This is acklist: {ackList}")
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
             seq_num += args.windowSize
             i += args.windowSize
@@ -404,18 +403,22 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection):
          clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
 
 
-#This a method for a server that use Go-Back-N to recived data ffomrclient 
+#This a method for a server that use Go-Back-N to recived data from client. 
+#It takes in three parameters:serverSocket,Seqnum and recivedData. 
+#
+
+
 def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method 
-    bufferData = []  #create an empty
-    checkSeqNum = seqNum
+    bufferData = []  #create an empty list
+    checkSeqNum = seqNum  
     ackNum = seqNum
-    while True:
-        message, clientAddress = serverSocket.recvfrom(1472)
-        header_from_msg = message[:12]
+    while True:  
+        message, clientAddress = serverSocket.recvfrom(1472)  #Receive a message and client address
+        header_from_msg = message[:12]   #get the header from th
         seq, acknum, flags, win = header.parse_header(header_from_msg)
-        syn, ack, fin = header.parse_flags(flags)
-        if(flags == 0):
-            if checkSeqNum == seq:
+        syn, ack, fin = header.parse_flags(flags) #Getting information for the header
+        if(flags == 0):  #if flags = 0
+            if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData 
                 bufferData.append(message[12:])
                 checkSeqNum += 1
                 if(len(bufferData) == args.windowSize): #If all data from the current window has been added
@@ -463,7 +466,8 @@ def createClient(serverip, port, method, fileForTransfer):
     print("Her opprettes client:")
     #Creating a udp socket for the client
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    handshakeClient(clientSocket, serverip, port, method, fileForTransfer) #Sending a packet with the syn flag to the server, if an ack is recieved transmission of data starts.
+    #Calling the hanshake method to start transmission with server
+    handshakeClient(clientSocket, serverip, port, method, fileForTransfer) 
     
 #Defining the argumentParser
 parser = argparse.ArgumentParser(description='The arguments used when calling the program')
