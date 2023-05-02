@@ -191,15 +191,15 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
             break
     #Close the client socket
     
-    size = os.path.getsize(args.file)/1000000
-    time_string = str(round(t_end,2))
-    throughput = size*8/t_end
-    headline = ["{:<8}".format("ID"), "{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
-    output = ["{:<8}".format(str(args.port)), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,2)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
+    size = os.path.getsize(args.file)/1000000 #Getting the size of the file in MB.
+    time_string = str(round(t_end,2)) #Rounding the time to have to decimal places, and converting from float to string.
+    throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
+    headline = ["{:<8}".format("ServerID"), "{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
+    output = ["{:<8}".format(str(serverConnection[0])), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,2)) + " MB"), "{:<11}".format(str(round(throughput,2)) + " Mbps")] #Formatting the output
 
-    print("")
-    print("\t".join(headline))
-    print("\t".join(output))
+    print("") #Adding a line before and after the table to make it easier to read. 
+    print("\t".join(headline)) #Printing the header for the output
+    print("\t".join(output)) #Printing the needed output for the 
     print("")
     print("Closing socket")
     clientSocket.close()
@@ -259,7 +259,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
             except: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 #TODO: Exception should not be generic, but a timeout exception
-                print("Breaker ut av reciving packets")
                 break
         print(f"This is acklist: {ackList}")
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
@@ -362,16 +361,17 @@ def createServer():
     
     UnpackFile(recievedData, args.newFile)  #Unpakc the file 
     
-#This method implemenst the Stop and wait for server
+#This method implemenst the Stop and wait for server. The methos listens to socket for incomming message from the client
+#It waits until a message is received and send acknowledgement message back back to client.
 def serverSaw(serverSocket, seqNum, recievedData):
     while True:
         message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
         header_from_msg = message[:12] #Getting the header e
         seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
         ack=seq
-        if(flags == 0):   #if the flag
-            recievedData.append(message[12:])
-            sendAck(ack, serverSocket, clientSocket)
+        if(flags == 0):   #if the flags is zero, this is a new packet
+            recievedData.append(message[12:])   #save the data
+            sendAck(ack, serverSocket, clientSocket)  #Send the ack message
         elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
             finish = CheckForFinish(fin, ack, serverSocket, clientSocket)
@@ -379,29 +379,34 @@ def serverSaw(serverSocket, seqNum, recievedData):
             #Her må vi liste ut alt dataen vi har fått inn ...!
                 return recievedData
     
-
+#This methos sends an acknowledment (ack) packet to client with given ack number
+#The method also implements skipakc flag that randomly skips sending acks. 
 def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a function to send acks to client. Function will randomly skip sending acks if the -t skipack flag is used 
-    data = b''
-    sequence_number = 0
-    flags = 4
-    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-    if args.testcase == "skipack":
+    data = b''         #intializes an empty byte string called data
+    sequence_number = 0    #sets sequence_number to 0
+    flags = 4             #sets flags variable to 4
+    msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)  #calls the create_packet methon to create a packet
+    if args.testcase == "skipack":#checks if the command-line argument "testcase" is set to skipack
         if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a 50% chance to loose a packet.
-            serverSocket.sendto(msg, clientSocket)
+            serverSocket.sendto(msg, clientSocket)  # sending the ack to the client
     else:
-        serverSocket.sendto(msg, clientSocket)
+        serverSocket.sendto(msg, clientSocket)#if the flag is not set the ACK is sent to the client.
 
-def sendingPacket(seq_num, data, clientSocket, serverConnection): #Creating a function to send packets to server. Will randomly skip sending packets when -t skipack flag is used.
-     flags = 0
-     packet= header.create_packet(seq_num, 0, flags, window, data)
-     if args.testcase == "loss":
+#This method sends packet to server
+# Will randomly skip sending packets when -t skipack flag is used.
+def sendingPacket(seq_num, data, clientSocket, serverConnection): 
+     flags = 0 #sets flags variable to 0
+     packet= header.create_packet(seq_num, 0, flags, window, data)  #calls the create_packet methon to create a packet
+     if args.testcase == "loss":  #: Checks if the args.testcase flag is set to "loss"
         if random.random() > 0.5: #Generating a random float between 0 and 1 to simulate a chance to loose a packet.
             clientSocket.sendto(packet, serverConnection)
      else:
-         clientSocket.sendto(packet, serverConnection)
+         clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
 
+
+#This a method for a server that use Go-Back-N to recived data ffomrclient 
 def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method 
-    bufferData = []
+    bufferData = []  #create an empty
     checkSeqNum = seqNum
     ackNum = seqNum
     while True:
