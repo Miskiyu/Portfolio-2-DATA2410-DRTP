@@ -379,11 +379,8 @@ def createServer():
     else:
         recievedData = serverSR(serverSocket, seqNum, recievedData)
     
-    #We have recived the whole file of the transfer, now we must unpack it, but only if the user gave the newfile a name to the server:
-    if(args.newFile):
-        UnpackFile(recievedData, args.newFile)
-    else:
-        print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE CREATED") #TODO: Move the test to the start of the code
+    UnpackFile(recievedData, args.newFile)
+    
 
 def serverSaw(serverSocket, seqNum, recievedData):
     while True:
@@ -518,8 +515,10 @@ if args.client == True or args.server == True:
             socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
             PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
             createClient(args.serverip, args.port, args.reliability, args.file)
-        if(args.server == True):
+        if(args.server == True and args.newFile == True):
             createServer()
-else:
+        else:
+            print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE TRANSMITTED AND CREATED AT RECIVEING END")
+else:    
     print("You have to use either the -s (server) og -c (client) flag.")
     sys.exit()
