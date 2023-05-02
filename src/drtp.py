@@ -512,14 +512,14 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if(args.client == True):
-            if(args.file == True):
+            if(args.file):
                 socket.setdefaulttimeout(0.05) #Setting socket timeout for the client.
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient(args.serverip, args.port, args.reliability, args.file)
             else:
                 print("WHEN YOU CREATE A CLIENT, YOU ALSO NEED TO DEFINE A FILE TO TRANSFER TO SERVER")
         if(args.server == True):
-            if(args.newFile == True):
+            if(args.newFile):
                 createServer()
             else:
                 print("A NEW FILENAME WAS NOT SPECIFIED TO SERVER, THEREFORE THE FILE CAN NOT BE TRANSMITTED AND CREATED AT RECIVEING END")
