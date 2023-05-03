@@ -1,16 +1,8 @@
-#TODO: Pass på at funksjonar står i ei logisk rekkjefølge
 #TODO: Fjern (og fiks, ikkje fjern utan å fikse :P) alle TODO-meldingar
-#TODO: Remove examples from header.py (At the very end).
-#TODO: Make sure Loss and skipack are implemented for all functions
 #TODO: Make sure only socket errors are caught when using methods that need the socekts error things. We don't wan't other errors to pass. 
 #In other words: all (or most) try except should 
-#TODO: The finishing message repeats 3 times at the server side, that's not cool.
-#TODO: Remove prints (clean output)
 #TODO: Bonus tasks
 #TODO: Testing in mininet
-#TODO: Comment code
-#TODO: Make sure you save the output file.
-#TODO: Make sure all comments are in english
 #TODO: Server should not have to spesify windowsize
 
 from socket import timeout
@@ -19,7 +11,6 @@ import argparse
 import socket
 import sys
 import re #Importing regex to check ip-adress for errors
-import inspect # Brukt for å få informasjon om objekt i koden. https://docs.python.org/3/library/inspect.html
 import os #Used to see if the file name given is valid (exists and is accessible)
 import random
 import time
@@ -75,13 +66,8 @@ def handshakeServer(serverSocket):
         #Parse the header of the received message
         seq, acknum, flags, win = header.parse_header(data_from_msg)
 
-        # Print the extracted sequence number, acknowledgment number, and flags
-        print(f"This is seq: {seq}, this is acknum: {acknum}, this is flags: {flags}")
-
         # Check if this is the first SYN message from the client
         if seq == 1 and acknum == 0 and flags == 8:
-            print("First syn recieved successfully at server from client!")
-
              # Update acknowledgment number, sequence number, and flags for the SYN-ACK response
             acknowledgment_number = 1
             seqNum = 2
@@ -94,7 +80,7 @@ def handshakeServer(serverSocket):
 
         # Check if this is the second SYN message from the client   
         if seq == 0 and acknum == 1 and flags == 4:
-            print("Second syn recieved successfully at server from client!")
+            print("A client has successfully connected to the server!")
              # Break the loop as the handshake is complete
             break
      # Return the updated sequence number    
@@ -116,7 +102,7 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
     syn, ack, fin = header.parse_flags(flags) # Parse the flags from the received message
 
     if syn and ack != 0 and acknum == 1: # Check if the received message is a SYN-ACK message
-        print("The ack from Server was recieved at Client!!")        
+        print("The SYN-ACK from Server was recieved at Client")        
          # Update sequence and acknowledgment numbers, and flags for the final ACK message
         sequence_number = 0
         acknowledgment_number = 1
@@ -140,6 +126,7 @@ def handshakeClient(clientSocket, serverip, port, method, fileForTransfer): #Sen
 # Define the function to transmit data and listen for responses from the server
 def transmittAndListen(clientSocket, serverConnection, seqNum): #Client 
     t0 = time.time()
+
      # Choose the reliability method based on the user argument and call the respective function
     if(args.reliability == "SAW"):
         seqNum = (int) (stop_and_wait(clientSocket, serverConnection, seqNum))
@@ -148,48 +135,30 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     else:
         seqNum=(int) (selectiveRepeat(clientSocket, serverConnection, seqNum))
     t_end = time.time() - t0
+
     #Going into Finish-mode:
     while True:
          # Initialize data, acknowledgment_number, and flags for the FIN message
         data = b'0' * 0
         acknowledgment_number = 0
         flags = 2
-
          # Create the FIN message packet
         msg = header.create_packet(seqNum, acknowledgment_number, flags, window, data)
         #Encoding packet and sending it to server ip and port
         clientSocket.sendto(msg, serverConnection)
-
-
          # Receive a response from the server
         modifiedMessage, serverConnection = clientSocket.recvfrom(12)
-        
-
         # Extract the first 12 bytes of the received message
         data_from_msg = modifiedMessage[:12]
-
          # Parse the header of the received message
         seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
-        
-
         # Parse the flags from the received message
         syn, ack, fin = header.parse_flags(flags)
-
          # Check if the received message is a FIN-ACK message
         if(fin == 2 and ack == 4):
-             # Update the sequence and acknowledgment numbers, and flags for the final ACK message
-            sequence_number = 0
-            acknowledgment_number = seqNum
-            flags = 4
-
-            # Create the final ACK message packet
-            msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)
-
-            # Send the final ACK message to the server
-            clientSocket.sendto(msg, serverConnection)
             print("We are done at client side, finishing")
             break
-    #Close the client socket
+            #Close the client socket
     
     size = os.path.getsize(args.file)/1000000 #Getting the size of the file in MB.
     time_string = str(round(t_end,4)) #Rounding the time to have to decimal places, and converting from float to string.
@@ -216,7 +185,7 @@ def stop_and_wait(clientSocket, serverConnection, seq_num):
         try:
              # Listen for an ACK message from the server
             ack, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
-        except:
+        except timeout:
             continue #If no message is recieved within the timelimit set, we go back to the start of the function.
         header_from_msg = ack[:12] #Extracting header from message
         seq, acknum, flags, win = header.parse_header (header_from_msg) #Getting information from the header
@@ -257,15 +226,16 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 # Parse the flags from the header
                 syn, ack, fin = header.parse_flags(flags)
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
-            except: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
-                #TODO: Exception should not be generic, but a timeout exception
+            except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 break
+
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
             seq_num += args.windowSize
             i += args.windowSize
     # Return the final sequence number after all packets have been sent
     return seq_num
 
+# Define the selective repeat function for the client-side:
 def selectiveRepeat(clientSocket, serverConnection, seq_num):
     i = 0
     toBeRetransmitted = [] #A list which will be used to know which data needs to be retransmitted. Data is retransmitted if no ack is recieved.
@@ -291,6 +261,7 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
         seq_num += args.windowSize #increasing seq num by window size
     return seq_num #Returning the seq num
 
+#Servers method for Selective repeat:
 def serverSR(serverSocket, seqNum, recivedData):
     nestedBufferList = [] #In this nested list, we store the data recieved from the server. 
     nextSeq = seqNum #The next seq.number we are waiting for
@@ -316,7 +287,7 @@ def serverSR(serverSocket, seqNum, recivedData):
             elif seq not in nestedBufferList: #If the recieved message is not already in the list of recieved data, we append it. Since acks can be lost, we need to add a check before adding.
                 nestedBufferList.append([seq, message[12:]])
         else: #We're done, finishing the code. 
-            finish = CheckForFinish(fin, ack, serverSocket, clientSocket) #TODO: Me har brukt mykje clientAdress og ClientSOcket om kvarandre, burde konsekvent bruke ein av delene.
+            finish = CheckForFinish(fin, seq, serverSocket, clientSocket) #TODO: Me har brukt mykje clientAdress og ClientSOcket om kvarandre, burde konsekvent bruke ein av delene.
             if finish:
                 #TODO: Her må vi liste ut alt dataen vi har fått inn ...! TODO
                 return recivedData
@@ -373,7 +344,7 @@ def serverSaw(serverSocket, seqNum, recievedData):
             sendAck(ack, serverSocket, clientSocket)  #Send the ack message
         elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
-            finish = CheckForFinish(fin, ack, serverSocket, clientSocket)
+            finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
             if finish:
             #Her må vi liste ut alt dataen vi har fått inn ...!
                 return recievedData
@@ -440,35 +411,31 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                 checkSeqNum = seqNum
                 bufferData.clear()
         else: #If the message is a FIN message
-            finish = CheckForFinish(fin, ack, serverSocket, clientAddress)
+            finish = CheckForFinish(fin, seq, serverSocket, clientAddress)
             if finish:
                 return recivedData #Return the receive data
+            
 
 #This method checks for the fin flag in the header of the message. 
-#If the fin=2 flag is received then it sendt ack.
-# if the ack=4 then it indicates the end of communication and True is returned
-#If the neither fin or ack is recevide, FALSE is returned. 
-def CheckForFinish(fin,ack,serverSocket,clientSocket): #TODO: THIS GET'S CALLED 2 TIMES WE HAVE TO FIX IT! 
-    #Safiq MAY see our output, so clean output is important TODO TODO TODO TODO
-    
-    if fin == 2:
-        print("First FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
-        acknowledgment_number = 0
+#If the fin=2 flag is received then it sends an ack and closes finishes.
+#If the fin is not recived, FALSE is returned. 
+def CheckForFinish(fin, ackNum ,serverSocket,clientSocket):
+    if(fin == 2):
+        print("Finished message recieved successfully at server from client!") 
+        acknowledgment_number = ackNum
         flags = 6
         data= b''
         seq = 0
         msg = header.create_packet(seq, acknowledgment_number, flags, window, data)
-        serverSocket.sendto(msg, clientSocket) #Sending first ack
-    elif ack == 4: # Ack for the first FIN is received
-        print("Second FIN recieved successfully at server from client!") #TODO: Remove unneeded prints
+        serverSocket.sendto(msg, clientSocket) #Sending ack on the finish
         return True # indicate finish
-    return False    #  if neither the first nor second FIN siganl, return false, so the communication is not finished    
+    return False    #  if the FIN siganl is not recieved, return false, so the communication is not finished    
 
 #This method takes in arguments passed in by the user. The defined IP to the serverm the serverport, which reliability method and what file the user wants to transfer.
 def createClient(serverip, port, method, fileForTransfer):
-    print("Her opprettes client:")
     #Creating a udp socket for the client
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    print("Client is created")
     #Calling the hanshake method to start transmission with server
     handshakeClient(clientSocket, serverip, port, method, fileForTransfer) 
     
