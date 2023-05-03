@@ -3,7 +3,8 @@
 #In other words: all (or most) try except should 
 #TODO: Bonus tasks
 #TODO: Testing in mininet
-#TODO: Server should not have to spesify windowsize
+#TODO: Server should not have to spesify windowsize (ideally, might be hard to implement)? Server window size only needed for GBN
+#TODO: Make sure we can resend fin if fin get's lost (or acks from fin)
 
 from socket import timeout
 import header 
@@ -279,7 +280,10 @@ def serverSR(serverSocket, seqNum, recivedData):
         header_from_msg = message[:12]
         seq, acknum, flags, win = header.parse_header(header_from_msg)
         syn, ack, fin = header.parse_flags(flags) #Getting information from the header
-        sendAck(seq, serverSocket, clientSocket) #Sending an ack to the client for the recieved package. The ack is equal to the seq for the package recieved
+        if(args.testcase == "skipack" and ackLoss == False and seq == 10):
+            ackLoss = True
+        else:
+            sendAck(seq, serverSocket, clientSocket, ackLoss) #Sending an ack to the client for the recieved package. The ack is equal to the seq for the package recieved
         if flags == 0: #If flags = 0, this is a normal package containing data.
             if seq == nextSeq: #Is the seq number recieved the right one? If yes, append to recivedData. If not, append to bufferdata.
                 
@@ -299,6 +303,7 @@ def serverSR(serverSocket, seqNum, recivedData):
             finish = CheckForFinish(fin, seq, serverSocket, clientSocket) #TODO: Me har brukt mykje clientAdress og ClientSOcket om kvarandre, burde konsekvent bruke ein av delene.
             if finish:
                 return recivedData
+
 stop_and_wait
 #This method takes in the filename specified by the user in the parameter. It chops the file into chunkcs/packets of 1460 bytes and add them into an array. The array is returned to the clients sending method
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed. 
@@ -349,11 +354,11 @@ def serverSaw(serverSocket, seqNum, recievedData):
         seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
         ack = seq
         if(flags == 0):   #if the flags is zero, this is a new packet
+            sendAck(ack, serverSocket, clientSocket, ackLoss)  #Send the ack message
             if(args.testcase == "skipack" and ack == 10 and ackLoss == False):
                 ackLoss = True
             else:
                 recievedData.append(message[12:])   #save the data
-            sendAck(ack, serverSocket, clientSocket, ackLoss)  #Send the ack message
         elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
             finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
@@ -369,8 +374,7 @@ def sendAck(acknowledgment_number, serverSocket, clientSocket, ackLoss): #Creati
     flags = 4             #sets flags variable to 4
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)  #calls the create_packet methon to create a packet
     if (args.testcase == "skipack" and acknowledgment_number == 10 and ackLoss == False):#checks if the command-line argument "testcase" is set to skipack
-        print(f"Packet with acknowledgment_Number: {acknowledgment_number}, was lost")
-        
+        print(f"Packet with acknowledgment_Number: {acknowledgment_number}, was lost")   
     else:
         serverSocket.sendto(msg, clientSocket)#if the flag is not set the ACK is sent to the client.
 
@@ -397,6 +401,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
         header_from_msg = message[:12]   #get the header from th
         seq, acknum, flags, win = header.parse_header(header_from_msg)
         syn, ack, fin = header.parse_flags(flags) #Getting information for the header
+
         if(flags == 0):  #if flags = 0
             if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData 
                 bufferData.append(message[12:])
@@ -412,14 +417,11 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                         if(args.testcase == "skipack" and ackNum == 10 and ackLoss == False):
                             ackLoss = True 
                         ackNum+=1
-            elif(seq < checkSeqNum):   #if the sequence number is less than expected value 
-                #This check prevents ackNum from growing out of control and keeps the acknumbers correct if an ack was lost in last transmission
-                if(ackNum >= checkSeqNum):
-                    ackNum = checkSeqNum
-                    ackNum -= args.windowSize
-                for i in range(args.windowSize): #Sending the amount of packet acks to the client
-                        sendAck(ackNum, serverSocket, clientAddress, ackLoss)
-                        ackNum+=1       
+            elif(seq < checkSeqNum):   #if the sequence number is less than expected value, we know there was a ackloss to client 
+                #retransmitting all acks to client
+                ackNum = seq
+                sendAck(ackNum, serverSocket, clientAddress, ackLoss)
+                ackNum+=1       
             else: # if the sequence number is greater than expected value, clear the bufferdata.
                 checkSeqNum = seqNum
                 bufferData.clear()
@@ -427,7 +429,6 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
             finish = CheckForFinish(fin, seq, serverSocket, clientAddress)
             if finish:
                 return recivedData #Return the receive data
-            
 
 #This method checks for the fin flag in the header of the message. 
 #If the fin=2 flag is received then it sends an ack and closes finishes.
