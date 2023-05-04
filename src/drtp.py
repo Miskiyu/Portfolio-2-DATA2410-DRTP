@@ -15,6 +15,8 @@ import re #Importing regex to check ip-adress for errors
 import os #Used to see if the file name given is valid (exists and is accessible)
 import time
 
+packetSentTime = [] #Declaring two empty arrays to calculate per packet RTT
+perPacketRoundTripTime = []
 window = 64000 #Window is always 64000, declaring it as a global variable at the start of the code.
 
 #The following 4 functions are user argument checks
@@ -174,7 +176,7 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
             break
             #Close the client socket
     
-    size = os.path.getsize(args.file)/1000000 #Getting the size of the file in MB.
+    size = os.path.getsize(args.file)/1000000 #GetFng the size of the file in MB.
     time_string = str(round(t_end,4)) #Rounding the time to have to decimal places, and converting from float to string.
     if t_end != 0:
         throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
@@ -224,11 +226,11 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost):
         print(f"Packet with sequenceNumber: {seq_num}, was lost")
     else:
         clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
-
+    
+    
     if args.timeout == "dyn": #If the timeout is dynamic
         global packetSentTime #tells the function to use the global array
         packetSentTime.append(time.time())
-        print(packetSentTime)
 
 def getPacket(clientSocket, serverConnection):
 
@@ -239,18 +241,15 @@ def getPacket(clientSocket, serverConnection):
     if args.timeout == "dyn": #If the timeout is dynamic
         global packetSentTime #tells the function to use the global array
         global perPacketRoundTripTime
-        print(acknum)
-        print(packetSentTime)
         perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2])
         if args.reliability != "GBN":
             if len(perPacketRoundTripTime) > 15:
                 average = sum(perPacketRoundTripTime[-10:])/len(perPacketRoundTripTime[-10:])
-                print(average)
-                socket.setdefaulttimeout(average)
+                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 1e-9.
+        else:
             if len(perPacketRoundTripTime) > args.windowSize*3:
                 average = sum(perPacketRoundTripTime[-3*args.windowSize:])/len(perPacketRoundTripTime[-3*args.windowSize:])
-                socket.setdefaulttimeout(average)
-    
+                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 1e-9.
     return acknum
 
 # Define the goBackN function for the client-side
@@ -302,7 +301,8 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
         while toBeRetransmitted != []: #Continuously waits for acks and resends packages until all acks are recieved. 
             try:
                 acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
-                toBeRetransmitted.remove(acknum) #If we recieve an ack, that means we don't need to retransmitt the message with the corresponding seq, so we remove it from the list of data we need to retransmitt. 
+                if acknum in toBeRetransmitted:  #Need this check for the code to work when using dynamic RTTs for packets
+                    toBeRetransmitted.remove(acknum)
             except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resent all packets that have not recieved an ack. 
                 if(args.testcase == "loss" and packetLost == False):
                     packetLost = True
@@ -323,7 +323,7 @@ def serverSR(serverSocket, seqNum, recivedData):
         header_from_msg = message[:12]
         seq, acknum, flags, win = header.parse_header(header_from_msg)
         syn, ack, fin = header.parse_flags(flags) #Getting information from the header
-        if(args.testcase == "skipack" and ackLoss == False and seq == 10):
+        if(args.testcase == "skipack" and ackLoss == False and seq == 30):
             ackLoss = True
         else:
             sendAck(seq, serverSocket, clientSocket, ackLoss) #Sending an ack to the client for the recieved package. The ack is equal to the seq for the package recieved
@@ -448,7 +448,7 @@ def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
                     checkSeqNum = seqNum
                     for i in range(args.windowSize): #Sending the amount of packet acks to the client
                         sendAck(ackNum, serverSocket, clientAddress, ackLoss)
-                        if(args.testcase == "skipack" and ackNum == 10 and ackLoss == False):
+                        if(args.testcase == "skipack" and ackNum == 30 and ackLoss == False):
                             ackLoss = True 
                         ackNum+=1
             elif(seq < checkSeqNum):   #if the sequence number is less than expected value, we know there was a ackloss to client 
@@ -483,6 +483,10 @@ def CheckForFinish(fin, ackNum ,serverSocket,clientSocket):
 def createClient(serverip, port, method, fileForTransfer):
     #Creating a udp socket for the client
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if args.timeout == "dyn":
+        clientSocket.settimeout(0.5) #Default timeout for dyn is 0.5, which is later changed
+    else:
+        clientSocket.settimeout(args.timeout)
     print("Client is created")
     #Calling the hanshake method to start transmission with server
     handshakeClient(clientSocket, serverip, port, method, fileForTransfer) 
@@ -513,14 +517,6 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if(args.client == True):
-            if args.timeout == "dyn":
-               socket.setdefaulttimeout(0.5) #Default timeout for dyn is 0.5, which is later changed
-               packetSentTime = [] #Declaring array to have time for packet sent 
-               perPacketRoundTripTime = [] ##Declaring array to calculate the per packet RTT
-
-            else:
-                socket.setdefaulttimeout(args.timeout)
-
             if(args.file):
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient(args.serverip, args.port, args.reliability, args.file)
