@@ -204,7 +204,7 @@ def stop_and_wait(clientSocket, serverConnection, seq_num):
         # Call the function to send a packet, which will simulate packet loss if the flag is used
         sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection, packetLost)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
         try:
-             acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
+             acknum = getPacket(clientSocket,) #Getting the packet from the server with the getpacket function
         except timeout:
             if(args.testcase == "loss" and seq_num == 10):
                 packetLost = True
@@ -225,33 +225,31 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost):
     if (args.testcase == "loss" and seq_num == 10 and packetLost == False):  #: Checks if the args.testcase flag is set to "loss"
         print(f"Packet with sequenceNumber: {seq_num}, was lost")
     else:
-        clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
-    
-    
+        clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server  
     if args.timeout == "dyn": #If the timeout is dynamic
         global packetSentTime #tells the function to use the global array
         packetSentTime.append(time.time())
 
-#
+#This method recive packet from client, then it calculate the RTT for the packet
 def getPacket(clientSocket, serverConnection):
 
-    message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
+    message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from client
     header_from_msg = message[:12] #Extracting header from message
     seq, acknum, flags, win = header.parse_header (header_from_msg) #Getting information from the header
     
     if args.timeout == "dyn": #If the timeout is dynamic
         global packetSentTime #tells the function to use the global array
         global perPacketRoundTripTime #tell the functions to use the gloabal array 
-        perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2]) # Calculates the Round Trip Time(RTT) of the packet by 
-        if args.reliability != "GBN":
-            if len(perPacketRoundTripTime) > 15:
-                average = sum(perPacketRoundTripTime[-10:])/len(perPacketRoundTripTime[-10:])
+        perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2]) # Calculates the Round Trip Time(RTT) of the packet by  subtracting the time it was send from the current time and then add to the list
+        if args.reliability != "GBN": #if SR or SAW is used as method
+            if len(perPacketRoundTripTime) > 15: #if more than 15 packets have been sent
+                average = sum(perPacketRoundTripTime[-10:])/len(perPacketRoundTripTime[-10:]) #calculate the average the last 10 packets 
                 clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 1e-9.
-        else:
-            if len(perPacketRoundTripTime) > args.windowSize*3:
-                average = sum(perPacketRoundTripTime[-3*args.windowSize:])/len(perPacketRoundTripTime[-3*args.windowSize:])
+        else: #if GBN is used at method 
+            if len(perPacketRoundTripTime) > args.windowSize*3: #if more han windowsize*3 packet have been sent
+                average = sum(perPacketRoundTripTime[-3*args.windowSize:])/len(perPacketRoundTripTime[-3*args.windowSize:]) #calculate the average of the last 3*windowsize packets
                 clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 1e-9.
-    return acknum
+    return acknum  #return acknum 
 
 # Define the goBackN function for the client-side
 def goBackN(clientSocket, serverConnection, seq_num):
