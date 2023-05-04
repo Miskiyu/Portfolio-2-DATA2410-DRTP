@@ -204,7 +204,7 @@ def stop_and_wait(clientSocket, serverConnection, seq_num):
         # Call the function to send a packet, which will simulate packet loss if the flag is used
         sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection, packetLost)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
         try:
-             acknum = getPacket(clientSocket,) #Getting the packet from the server with the getpacket function
+             acknum = getAck(clientSocket,) #Getting the packet from the server with the getAck function
         except timeout:
             if(args.testcase == "loss" and seq_num == 10):
                 packetLost = True
@@ -231,7 +231,7 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost):
         packetSentTime.append(time.time())
 
 #This method recive packet from client, then it calculate the RTT for the packet
-def getPacket(clientSocket, serverConnection):
+def getAck(clientSocket, serverConnection):
 
     message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from client
     header_from_msg = message[:12] #Extracting header from message
@@ -268,7 +268,7 @@ def goBackN(clientSocket, serverConnection, seq_num):
         # Receive ACKs for the packets sent
         for j in range(args.windowSize): #(Hopefully) Recieving n acks
             try:
-                acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
+                acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
             except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 if(args.testcase == "loss" and packetLost == False):
@@ -299,7 +299,7 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
             #TODO: Change from generic exception to out of bonds exception
         while toBeRetransmitted != []: #Continuously waits for acks and resends packages until all acks are recieved. 
             try:
-                acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
+                acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 if acknum in toBeRetransmitted:  #Need this check for the code to work when using dynamic RTTs for packets
                     toBeRetransmitted.remove(acknum)
             except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resent all packets that have not recieved an ack. 
