@@ -229,8 +229,6 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost):
         global packetSentTime #tells the function to use the global array
         packetSentTime.append(time.time())
         print(packetSentTime)
-    
-
 
 def getPacket(clientSocket, serverConnection):
 
@@ -399,7 +397,7 @@ def serverSaw(serverSocket, seqNum, recievedData):
         ack = seq
         if(flags == 0):   #if the flags is zero, this is a new packet
             sendAck(ack, serverSocket, clientSocket, ackLoss)  #Send the ack message
-            if(args.testcase == "skipack" and ack == 10 and ackLoss == False):
+            if(args.testcase == "skipack" and ack == 30 and ackLoss == False):
                 ackLoss = True
             else:
                 recievedData.append(message[12:])   #save the data
