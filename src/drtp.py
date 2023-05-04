@@ -232,6 +232,7 @@ def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost):
         global packetSentTime #tells the function to use the global array
         packetSentTime.append(time.time())
 
+#
 def getPacket(clientSocket, serverConnection):
 
     message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
@@ -240,8 +241,8 @@ def getPacket(clientSocket, serverConnection):
     
     if args.timeout == "dyn": #If the timeout is dynamic
         global packetSentTime #tells the function to use the global array
-        global perPacketRoundTripTime
-        perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2])
+        global perPacketRoundTripTime #tell the functions to use the gloabal array 
+        perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2]) # Calculates the Round Trip Time(RTT) of the packet by 
         if args.reliability != "GBN":
             if len(perPacketRoundTripTime) > 15:
                 average = sum(perPacketRoundTripTime[-10:])/len(perPacketRoundTripTime[-10:])
