@@ -32,6 +32,8 @@ Other command-line options:
     -t, --testcase        if you want to skip ack to trigger retransmission 
     -f, --file            select which file you want to send
     -w, --windowSize      Select the windowsize for the transmission of packets
+    -T, --timeout         Select the timeout
+
 
 Reliablity functions
 --------------------

@@ -13,12 +13,25 @@ import socket
 import sys
 import re #Importing regex to check ip-adress for errors
 import os #Used to see if the file name given is valid (exists and is accessible)
-import random
 import time
 
 window = 64000 #Window is always 64000, declaring it as a global variable at the start of the code.
 
-#The following 3 functions are user argument checks
+#The following 4 functions are user argument checks
+
+#Checks if the timeout inputted by the user is correct. If it's a float, the default timeout is set to that number.
+#If the default timeout is "dyn", the default timeout is set to 0.5, and later changed based on the time used to send packets.
+def check_timeout(timeout):
+    try: #Checking if timeout is a float
+        time = float(timeout) 
+    except ValueError: #If it's not a float, checking if it's "dyn"
+        if timeout == "dyn":
+            return timeout
+        else: #If it's neither a float nor "dyn", raising an error.
+            raise argparse.ArgumentTypeError("Expected a float or dyn but you entered a " + str(type(timeout))) #Need to convert type(val) to string to append to the string.
+    socket.setdefaulttimeout(time) #Setting socket timeout for the client. It is 0.
+    return time
+
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
     if not re.search(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", ip_address): #Check that the format is like this: "XXX.XXX.XXX.XXX", where X is a number between 0 and 9.
         raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
@@ -163,11 +176,16 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     
     size = os.path.getsize(args.file)/1000000 #Getting the size of the file in MB.
     time_string = str(round(t_end,4)) #Rounding the time to have to decimal places, and converting from float to string.
-    throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
+    if t_end != 0:
+        throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
+        print("") #Adding a line before and after the table to make it easier to read. 
+    else:
+        throughput ="Error"
+        print("") #Adding a line before and after the table to make it easier to read. 
+        print("TIME TOO LOW TO CALCULATE BANDWIDTH, SEND A BIGGER PACKAGE")
     headline = ["{:<8}".format("ServerID"),"{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<8}".format("Timeout"),"{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
     output = ["{:<8}".format(str(serverConnection[0])),"{:<8}".format(args.reliability),"{:<8}".format(args.windowSize), "{:<8}".format(str(clientSocket.gettimeout())+ " s"), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,4)) + " Mbps")] #Formatting the output
 
-    print("") #Adding a line before and after the table to make it easier to read. 
     print("\t".join(headline)) #Printing the header for the output
     print("\t".join(output)) #Printing the needed output for the 
     print("")
@@ -184,21 +202,58 @@ def stop_and_wait(clientSocket, serverConnection, seq_num):
         # Call the function to send a packet, which will simulate packet loss if the flag is used
         sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection, packetLost)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
         try:
-             # Listen for an ACK message from the server
-            ack, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
+             acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
         except timeout:
             if(args.testcase == "loss" and seq_num == 10):
                 packetLost = True
             continue #If no message is recieved within the timelimit set, we go back to the start of the function.
-        header_from_msg = ack[:12] #Extracting header from message
-        seq, acknum, flags, win = header.parse_header (header_from_msg) #Getting information from the header
-        syn, ack, fin = header.parse_flags(flags) #Getting the flags
         if acknum == seq_num: #If the recieved acknum equals the seqnum sent, the server recieved the package, and we can send the next one. If not, the same package is retransmitted.
              # Increment the sequence number and counter variable to send the next packet
             seq_num +=1
             i+=1
      # Return the final sequence number after all packets have been sent        
     return seq_num
+
+#This method sends packet to server
+# Will not send the 10.th packet
+def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost): 
+     
+    flags = 0 #sets flags variable to 0
+    packet= header.create_packet(seq_num, 0, flags, window, data)  #calls the create_packet methon to create a packet
+    if (args.testcase == "loss" and seq_num == 10 and packetLost == False):  #: Checks if the args.testcase flag is set to "loss"
+        print(f"Packet with sequenceNumber: {seq_num}, was lost")
+    else:
+        clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
+
+    if args.timeout == "dyn": #If the timeout is dynamic
+        global packetSentTime #tells the function to use the global array
+        packetSentTime.append(time.time())
+        print(packetSentTime)
+    
+
+
+def getPacket(clientSocket, serverConnection):
+
+    message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from server
+    header_from_msg = message[:12] #Extracting header from message
+    seq, acknum, flags, win = header.parse_header (header_from_msg) #Getting information from the header
+    
+    if args.timeout == "dyn": #If the timeout is dynamic
+        global packetSentTime #tells the function to use the global array
+        global perPacketRoundTripTime
+        print(acknum)
+        print(packetSentTime)
+        perPacketRoundTripTime.append(time.time() - packetSentTime[acknum-2])
+        if args.reliability != "GBN":
+            if len(perPacketRoundTripTime) > 15:
+                average = sum(perPacketRoundTripTime[-10:])/len(perPacketRoundTripTime[-10:])
+                print(average)
+                socket.setdefaulttimeout(average)
+            if len(perPacketRoundTripTime) > args.windowSize*3:
+                average = sum(perPacketRoundTripTime[-3*args.windowSize:])/len(perPacketRoundTripTime[-3*args.windowSize:])
+                socket.setdefaulttimeout(average)
+    
+    return acknum
 
 # Define the goBackN function for the client-side
 def goBackN(clientSocket, serverConnection, seq_num):
@@ -217,28 +272,21 @@ def goBackN(clientSocket, serverConnection, seq_num):
         # Receive ACKs for the packets sent
         for j in range(args.windowSize): #(Hopefully) Recieving n acks
             try:
-                # Listen for an ACK message from the server
-                ack, serverConnection =  clientSocket.recvfrom(12)
-               
-                 # Extract the header from the received ACK message
-                header_from_msg = ack[:12]
-
-                # Parse the header to get the sequence number, acknowledgment number, flags, and window size
-                seq, acknum, flags, win = header.parse_header (header_from_msg) #it's an ack message with only the header
-
-                # Parse the flags from the header
-                syn, ack, fin = header.parse_flags(flags)
+                acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
             except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 if(args.testcase == "loss" and packetLost == False):
                     packetLost = True
                 break
+            
 
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
             seq_num += args.windowSize
             i += args.windowSize
     # Return the final sequence number after all packets have been sent
     return seq_num
+
+
 
 # Define the selective repeat function for the client-side:
 def selectiveRepeat(clientSocket, serverConnection, seq_num):
@@ -255,10 +303,7 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
             #TODO: Change from generic exception to out of bonds exception
         while toBeRetransmitted != []: #Continuously waits for acks and resends packages until all acks are recieved. 
             try:
-                ack, serverConnection =  clientSocket.recvfrom(12) #Getting adress and message from server
-                header_from_msg = ack[:12] #Extracting header from message
-                seq, acknum, flags, win = header.parse_header (header_from_msg) #Getting flags from the header
-                syn, ack, fin = header.parse_flags(flags)
+                acknum = getPacket(clientSocket, serverConnection) #Getting the packet from the server with the getpacket function
                 toBeRetransmitted.remove(acknum) #If we recieve an ack, that means we don't need to retransmitt the message with the corresponding seq, so we remove it from the list of data we need to retransmitt. 
             except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resent all packets that have not recieved an ack. 
                 if(args.testcase == "loss" and packetLost == False):
@@ -304,7 +349,6 @@ def serverSR(serverSocket, seqNum, recivedData):
             if finish:
                 return recivedData
 
-stop_and_wait
 #This method takes in the filename specified by the user in the parameter. It chops the file into chunkcs/packets of 1460 bytes and add them into an array. The array is returned to the clients sending method
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed. 
     listOfData = [] 
@@ -373,20 +417,12 @@ def sendAck(acknowledgment_number, serverSocket, clientSocket, ackLoss): #Creati
     sequence_number = 0    #sets sequence_number to 0
     flags = 4             #sets flags variable to 4
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data)  #calls the create_packet methon to create a packet
-    if (args.testcase == "skipack" and acknowledgment_number == 10 and ackLoss == False):#checks if the command-line argument "testcase" is set to skipack
+    if (args.testcase == "skipack" and acknowledgment_number == 30 and ackLoss == False):#checks if the command-line argument "testcase" is set to skipack
         print(f"Packet with acknowledgment_Number: {acknowledgment_number}, was lost")   
     else:
         serverSocket.sendto(msg, clientSocket)#if the flag is not set the ACK is sent to the client.
 
-#This method sends packet to server
-# Will randomly skip sending packets when -t skipack flag is used.
-def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost): 
-     flags = 0 #sets flags variable to 0
-     packet= header.create_packet(seq_num, 0, flags, window, data)  #calls the create_packet methon to create a packet
-     if (args.testcase == "loss" and seq_num == 10 and packetLost == False):  #: Checks if the args.testcase flag is set to "loss"
-        print(f"Packet with sequenceNumber: {seq_num}, was lost")
-     else:
-         clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server
+
 
 #This a method for a server that use Go-Back-N to recived data from client. 
 #It takes in three parameters:serverSocket,Seqnum and recivedData. 
@@ -463,12 +499,12 @@ parser.add_argument("-F", "--newFile", help="Write the name of the new file and 
 parser.add_argument("-c", "--client", help="try to type '-c", action="store_true")
 parser.add_argument("-I", "--serverip", help="Write the IP-address of the server to connect", type=check_IP, default=socket.gethostbyname(socket.gethostname()))
 parser.add_argument("-f", "--file", help="Write in the file you want to transmitt", type=check_file)
+parser.add_argument("-T", "--timeout", help="Select the default timeout",type=check_timeout, default="dyn") #This also set's the default socket timeout
 #shared arguments
 parser.add_argument("-t", "--testcase", help="Type in if you want to set a type of testcase", type=str, choices=['loss', 'skipack'])
 parser.add_argument("-p", "--port", help="type -p and wanted portnumber, or default port 8080 will be set", type=check_port, default=8080)
 parser.add_argument("-r", "--reliability", help="Type inn the type of reliablity you want", type=str, default='SAW', choices=['SAW', 'GBN', 'SR'])
 parser.add_argument("-w", "--windowSize", help="Select the windowSize for the transmission of packets",type=int, default=5, choices=[5, 10, 15])
-#parser.add_argument("-T", "--TIMEOUT", help="Select the default timeout",type=check_timeout, default=0.5)
 args = parser.parse_args()
 
 #checks if client or server is invoked. If both server and client is invoked at the same time, it prints out error message. 
@@ -478,9 +514,16 @@ if args.client == True or args.server == True:
         print("You have to use either the -s (server) og -c (client) flag, not both")
         sys.exit()
     else:
-        if(args.client == True):  
+        if(args.client == True):
+            if args.timeout == "dyn":
+               socket.setdefaulttimeout(0.5) #Default timeout for dyn is 0.5, which is later changed
+               packetSentTime = [] #Declaring array to have time for packet sent 
+               perPacketRoundTripTime = [] ##Declaring array to calculate the per packet RTT
+
+            else:
+                socket.setdefaulttimeout(args.timeout)
+
             if(args.file):
-                socket.setdefaulttimeout(0.5) #Setting socket timeout for the client.
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient(args.serverip, args.port, args.reliability, args.file)
             else:
