@@ -198,17 +198,14 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
 def stop_and_wait(clientSocket, serverConnection, seq_num): 
      # Initialize a counter variable
     i = 0
-    packetLost = False
       # Continue sending packets while there are packets in the PackedFile list
     while i < len(PackedFile):
         # Call the function to send a packet, which will simulate packet loss if the flag is used
-        sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection, packetLost)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
+        sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
         try:
              acknum = getAck(clientSocket,) #Getting the packet from the server with the getAck function
         except timeout:
-            if(args.testcase == "loss" and seq_num == 10):
-                packetLost = True
-            continue #If no message is recieved within the timelimit set, we go back to the start of the function.
+            continue
         if acknum == seq_num: #If the recieved acknum equals the seqnum sent, the server recieved the package, and we can send the next one. If not, the same package is retransmitted.
              # Increment the sequence number and counter variable to send the next packet
             seq_num +=1
@@ -218,12 +215,13 @@ def stop_and_wait(clientSocket, serverConnection, seq_num):
 
 #This method sends packet to server
 # Will not send the 10.th packet
-def sendingPacket(seq_num, data, clientSocket, serverConnection, packetLost): 
+def sendingPacket(seq_num, data, clientSocket, serverConnection): 
      
     flags = 0 #sets flags variable to 0
     packet= header.create_packet(seq_num, 0, flags, window, data)  #calls the create_packet methon to create a packet
-    if (args.testcase == "loss" and seq_num == 10 and packetLost == False):  #: Checks if the args.testcase flag is set to "loss"
+    if (args.testcase == "loss" and seq_num == 10):  #: Checks if the args.testcase flag is set to "loss"
         print(f"Packet with sequenceNumber: {seq_num}, was lost")
+        args.testcase = "loss completed"
     else:
         clientSocket.sendto(packet, serverConnection) #if the flag is not set, the packet is sent to the server  
     if args.timeout == "dyn": #If the timeout is dynamic
@@ -255,15 +253,14 @@ def getAck(clientSocket, serverConnection):
 def goBackN(clientSocket, serverConnection, seq_num):
     i = 0 #initialise a counter variable
     ackList = [] # Initialize an empty list to store acknowledgment numbers
-    packetLost = False
     while i < len(PackedFile): #Sending the packets within this loop. If not divisable by n, we send the remaining n packets as empty packets. 
         ackList = []
         for j in range(args.windowSize): #sending the packets
             if j + i >= len(PackedFile): #If the packets are not divisable by n, we send empty packets so that the total adds up to n
-                sendingPacket(seq_num + j, b'0' * 0, clientSocket,serverConnection, packetLost)
+                sendingPacket(seq_num + j, b'0' * 0, clientSocket,serverConnection)
             else:
                  # Send packets from the PackedFile list
-                sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection, packetLost)
+                sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection)
 
         # Receive ACKs for the packets sent
         for j in range(args.windowSize): #(Hopefully) Recieving n acks
@@ -271,8 +268,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 ackList.append(acknum) #Appending the recieved acknum to the list. 
             except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
-                if(args.testcase == "loss" and packetLost == False):
-                    packetLost = True
                 break
             
 
@@ -288,11 +283,10 @@ def goBackN(clientSocket, serverConnection, seq_num):
 def selectiveRepeat(clientSocket, serverConnection, seq_num):
     i = 0
     toBeRetransmitted = [] #A list which will be used to know which data needs to be retransmitted. Data is retransmitted if no ack is recieved.
-    packetLost = False
     while i < len(PackedFile): #The final packages are not sent in a bunch of n (window size), but rather based on how many packets are left to send
         for j in range(args.windowSize): #sending the first n packets
             try:
-                sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection, packetLost) #Sending the packets
+                sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection) #Sending the packets
                 toBeRetransmitted.append(seq_num + j) #adding the seq_num to toBeRetransmitted to signal which seq_numbers were sent.
             except:
                 break #Break out of the loop if we can't send the packet, which will happen if we reach try to send a part of PackedFile which is out of range.
@@ -302,11 +296,9 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 if acknum in toBeRetransmitted:  #Need this check for the code to work when using dynamic RTTs for packets
                     toBeRetransmitted.remove(acknum)
-            except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resent all packets that have not recieved an ack. 
-                if(args.testcase == "loss" and packetLost == False):
-                    packetLost = True
+            except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resend all packets that have not recieved an ack. 
                 for k in toBeRetransmitted: #Looping though all packets needing to be retransmitted
-                    sendingPacket(k, PackedFile[k-2], clientSocket,serverConnection, packetLost) #Sending all packets which need to be retransmitted. Using k-2 as the package number is 2 bigger than the ack num.
+                    sendingPacket(k, PackedFile[k-2], clientSocket,serverConnection) #Sending all packets which need to be retransmitted. Using k-2 as the package number is 2 bigger than the ack num.
         i += args.windowSize #increasing i by window size
         seq_num += args.windowSize #increasing seq num by window size
     return seq_num #Returning the seq num
