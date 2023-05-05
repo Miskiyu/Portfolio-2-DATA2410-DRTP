@@ -275,7 +275,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
         for j in range(args.windowSize): #(Hopefully) Recieving n acks
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
-                ackList.append(acknum) #Appending the recieved acknum to the list.
             except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 break
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
@@ -357,7 +356,7 @@ def UnpackFile(fileToBeUnpacked,outputFileName):
         for data in fileToBeUnpacked:
             outputFile.write(data)
 
-#This methon creates a server and watis for a connection form client
+#This method creates a server and watis for a connection form client
 #Once the connections is established, it uses reliability function to recevie and extrac the file data sent by the client.
 #It then extracts the file data and stores it in a the server
 def createServer():
