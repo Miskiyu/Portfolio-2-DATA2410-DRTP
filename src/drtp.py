@@ -160,7 +160,6 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
         # Parse the flags from the received message
         syn, ack, fin = header.parse_flags(flags)
          # Check if the received message is a FIN-ACK message
-        print(perPacketRoundTripTime)
         if(fin == 2 and ack == 4):
             print("We are done at client side, finishing")
             break
@@ -228,37 +227,36 @@ def getAck(clientSocket, serverConnection):
     if args.timeout == "dyn": #If the timeout is dynamic
         global perPacketRoundTripTime #tell the functions to use the gloabal array
         i = len(perPacketRoundTripTime) -1
-        while i > 0:
+        while i >= 0:
             if ack == perPacketRoundTripTime[i][0]:
-                perPacketRoundTripTime[i][1] = time.time()-perPacketRoundTripTime[i][1]
+                rtt = time.time()-perPacketRoundTripTime[i][1]
+                perPacketRoundTripTime[i][1] = rtt
                 break
             i -= 1
 
         if args.reliability != "GBN": #if SR or SAW is used as method
             if len(perPacketRoundTripTime) > 15: #if more than 15 packets have been sent
-                average = spescialSum(10)/10 #calculate the average the last 10 packets
-                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.001.
+                average = specialSum(10)/10 #calculate the average the last 10 packets
+                clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
         else: #if GBN is used at method
             if len(perPacketRoundTripTime) > args.windowSize*3: #if more than windowsize*3 packet have been sent
-                average = spescialSum(3*args.windowSize)/3*args.windowSize #calculate the average of the last 3*windowsize packets
-                print(average)
-                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.001.
+                average = (specialSum(3*args.windowSize))/(3*args.windowSize) #calculate the average of the last 3*windowsize packets
+                clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
     return ack  #return acknum
 
-def spescialSum(sumSize): #Sums the last n numbers of a function, but skips any numbers larger than 100.
+def specialSum(sumSize): #Sums the last n numbers of a function, but skips any numbers larger than 100.
     global perPacketRoundTripTime #tell the functions to use the gloabal array
     counter = len(perPacketRoundTripTime) -1
     i = 0
     sum = 0
     while i < sumSize and counter >= 0:
-        if perPacketRoundTripTime[counter][1] > 100:
+        if perPacketRoundTripTime[counter][1] > 10000: #This makes sure we skip any values that contain only the time when the seq was sent, but the ack_recieved time was not subtracted. This will for instance happen if the ack is lost.
             counter -= 1
         else:
             sum += perPacketRoundTripTime[counter][1]
             counter -= 1
             i += 1
     return sum
-
 
 # Define the goBackN function for the client-side
 def goBackN(clientSocket, serverConnection, seq_num):
@@ -323,7 +321,6 @@ def serverSR(serverSocket, seqNum, recivedData):
         sendAck(seq, serverSocket, clientSocket) #Sending an ack to the client for the recieved package. The ack is equal to the seq for the package recieved
         if flags == 0: #If flags = 0, this is a normal package containing data.
             if seq == nextSeq: #Is the seq number recieved the right one? If yes, append to recivedData. If not, append to bufferdata.
-
                 recivedData.append(message[12:])
                 nextSeq += 1 #The next seq we need is one higher
                 while i < len(nestedBufferList): #Looping through the bufferdata to see if any of the buffered data can be added. We always do this when we add data to recivedData
