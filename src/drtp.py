@@ -1,10 +1,3 @@
-#TODO: Fjern (og fiks, ikkje fjern utan å fikse :P) alle TODO-meldingar
-#TODO: Make sure only socket errors are caught when using methods that need the socekts error things. We don't wan't other errors to pass.
-#In other words: all (or most) try except should
-#TODO: Bonus tasks
-#TODO: Testing in mininet
-#TODO: Make sure we can resend fin if fin get's lost (or acks from fin)
-
 from socket import timeout
 import header
 import argparse
@@ -292,9 +285,8 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
             try:
                 sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection) #Sending the packets
                 toBeRetransmitted.append(seq_num + j) #adding the seq_num to toBeRetransmitted to signal which seq_numbers were sent.
-            except:
+            except IndexError:
                 break #Break out of the loop if we can't send the packet, which will happen if we reach try to send a part of PackedFile which is out of range.
-            #TODO: Change from generic exception to out of bonds exception
         while toBeRetransmitted != []: #Continuously waits for acks and resends packages until all acks are recieved.
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
@@ -333,7 +325,7 @@ def serverSR(serverSocket, seqNum, recivedData):
             elif seq not in nestedBufferList: #If the recieved message is not already in the list of recieved data, we append it. Since acks can be lost, we need to add a check before adding.
                 nestedBufferList.append([seq, message[12:]])
         else: #We're done, finishing the code.
-            finish = CheckForFinish(fin, seq, serverSocket, clientSocket) #TODO: Me har brukt mykje clientAdress og ClientSOcket om kvarandre, burde konsekvent bruke ein av delene.
+            finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
             if finish:
                 return recivedData
 
