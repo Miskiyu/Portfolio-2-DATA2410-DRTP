@@ -1,8 +1,7 @@
 Reliable Transport Protocol (DRTP) 
 ----------------------------------
-
-
 DRTP is a simple transport protocol that provides reliable data delivery on top of UDP. DRTP wil ensure thata is reliably delivered in order whitout missing data.
+
 
 How to use the application
 --------------------------
@@ -11,7 +10,7 @@ The transfer application can be run in either server mode or client mode. We hav
 ## Server mode ##
 The server can be invoked with 
     
-    python3 application.py  -s -b <ip_address> -p <port_number>
+    python3 drtp.py  -s -b <ip_address> -p <port_number>
 
 Other command-line options:
 
@@ -24,7 +23,7 @@ Other command-line options:
 ## Client mode ##
 The client can be invoked with:
 
-    python3 application.py -c -I <server_ip_address> -p <server_portt> 
+    python3 drtp.py -c -I <server_ip_address> -p <server_portt> 
 
 Other command-line options:
 
