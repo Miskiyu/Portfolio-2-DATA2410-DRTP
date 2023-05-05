@@ -239,9 +239,10 @@ def getAck(clientSocket, serverConnection):
                 average = spescialSum(10)/10 #calculate the average the last 10 packets
                 clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.001.
         else: #if GBN is used at method
-            if len(perPacketRoundTripTime) > args.windowSize*3: #if more han windowsize*3 packet have been sent
+            if len(perPacketRoundTripTime) > args.windowSize*3: #if more than windowsize*3 packet have been sent
                 average = spescialSum(3*args.windowSize)/3*args.windowSize #calculate the average of the last 3*windowsize packets
-                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.001.
+                print(average)
+                clientSocket.settimeout(average*4 if average != 0 else 0.001) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.001.
     return ack  #return acknum
 
 def spescialSum(sumSize): #Sums the last n numbers of a function, but skips any numbers larger than 100.
