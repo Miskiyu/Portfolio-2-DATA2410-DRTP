@@ -7,6 +7,7 @@ import re #Importing regex to check ip-adress for errors
 import os #Used to see if the file name given is valid (exists and is accessible)
 import time
 
+allTimeouts = []
 packetSentTime = [] #Declaring two empty arrays to calculate per packet RTT
 perPacketRoundTripTime = []
 window = 64000 #Window is always 64000, declaring it as a global variable at the start of the code.
@@ -123,6 +124,7 @@ def handshakeClient(clientSocket): #Sends an empty package with a header contain
 
 # Define the function to transmit data and listen for responses from the server
 def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
+
     t0 = time.time()
 
      # Choose the reliability method based on the user argument and call the respective function
@@ -158,8 +160,19 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
             break
             #Close the client socket
 
+    if args.timeout == "dyn":
+        global allTimeouts
+        if allTimeouts == []:
+            allTimeouts.append(0.5) #If the recieved file is very small, the timeout will not get dynamically changed.
+        else:
+            print("\nHere are some information about the dynamically calculated timeout:")
+            print(f"Lowest: {min(allTimeouts):.3f}, Highest: {max(allTimeouts):.3f}, Average: {sum(allTimeouts) / len(allTimeouts):.3f}")
+    
+
     size = os.path.getsize(args.file)/1000000 #GetFng the size of the file in MB.
     time_string = str(round(t_end,4)) #Rounding the time to have to decimal places, and converting from float to string.
+    averageTimeout = sum(allTimeouts) / len(allTimeouts)
+    averageTimeoutWithUnits = f"{averageTimeout:.3f} s"
     if t_end != 0:
         throughput = size*8/t_end #Calculating the thoruhgput (multiply by 8 to convert from bytes to bits).
         print("") #Adding a line before and after the table to make it easier to read.
@@ -167,8 +180,8 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
         throughput ="Error"
         print("") #Adding a line before and after the table to make it easier to read.
         print("TIME TOO LOW TO CALCULATE BANDWIDTH, SEND A BIGGER PACKAGE")
-    headline = ["{:<8}".format("ServerID"),"{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<8}".format("Timeout"),"{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
-    output = ["{:<8}".format(str(serverConnection[0])),"{:<8}".format(args.reliability),"{:<8}".format(args.windowSize if args.reliability != "SAW" else "1"), "{:<8}".format(str(clientSocket.gettimeout())+ " s"), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,4)) + " Mbps")] #Formatting the output
+    headline = ["{:<8}".format("ServerID"),"{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<12}".format("Avg. Timeout"),"{:<11}".format("time"), "{:<15}".format("Transfer"), "{:<11}".format("Bandwidth")]
+    output = ["{:<8}".format(str(serverConnection[0])),"{:<8}".format(args.reliability),"{:<8}".format(args.windowSize if args.reliability != "SAW" else "1"), "{:<12}".format(averageTimeoutWithUnits), "{:<11}".format(time_string + " s"), "{:<15}".format(str(round(size,4)) + " MB"), "{:<11}".format(str(round(throughput,4)) + " Mbps")] #Formatting the output
 
     print("\t".join(headline)) #Printing the header for the output
     print("\t".join(output)) #Printing the needed output for the
@@ -176,24 +189,6 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     print("Closing socket")
     clientSocket.close()
 
-# Define the stop_and_wait function for the client-side
-def stop_and_wait(clientSocket, serverConnection, seq_num):
-     # Initialize a counter variable
-    i = 0
-      # Continue sending packets while there are packets in the PackedFile list
-    while i < len(PackedFile):
-        # Call the function to send a packet, which will simulate packet loss if the flag is used
-        sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
-        try:
-             acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
-        except timeout:
-            continue
-        if acknum == seq_num: #If the recieved acknum equals the seqnum sent, the server recieved the package, and we can send the next one. If not, the same package is retransmitted.
-             # Increment the sequence number and counter variable to send the next packet
-            seq_num +=1
-            i+=1
-     # Return the final sequence number after all packets have been sent
-    return seq_num
 
 #This method sends packet to server
 # Will not send the 10.th packet
@@ -228,13 +223,16 @@ def getAck(clientSocket, serverConnection):
             i -= 1
 
         if args.reliability != "GBN": #if SR or SAW is used as method
+            global allTimeouts #Using a variable to store the average timeout for the input
             if len(perPacketRoundTripTime) > 15: #if more than 15 packets have been sent
                 average = specialSum(10)/10 #calculate the average the last 10 packets
                 clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
+                allTimeouts.append(average*4 if average != 0 else 0.2)
         else: #if GBN is used at method
             if len(perPacketRoundTripTime) > args.windowSize*3: #if more than windowsize*3 packet have been sent
                 average = (specialSum(3*args.windowSize))/(3*args.windowSize) #calculate the average of the last 3*windowsize packets
                 clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
+                allTimeouts.append(average*4 if average != 0 else 0.2)
     return ack  #return acknum
 
 def specialSum(sumSize): #Sums the last n numbers of a function, but skips any numbers larger than 100.
@@ -250,6 +248,48 @@ def specialSum(sumSize): #Sums the last n numbers of a function, but skips any n
             counter -= 1
             i += 1
     return sum
+
+# Define the stop_and_wait function for the client-side
+def stop_and_wait(clientSocket, serverConnection, seq_num):
+     # Initialize a counter variable
+    i = 0
+      # Continue sending packets while there are packets in the PackedFile list
+    print(len(PackedFile))
+    print("HAAAAAAY!!!!!!!")
+    while i < len(PackedFile):
+        # Call the function to send a packet, which will simulate packet loss if the flag is used
+        sendingPacket(seq_num, PackedFile[i], clientSocket, serverConnection)  #Calling a function to send a packet, which will simulate packet loss if the flag is used.
+        try:
+             acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
+        except timeout:
+            continue
+        if acknum == seq_num: #If the recieved acknum equals the seqnum sent, the server recieved the package, and we can send the next one. If not, the same package is retransmitted.
+             # Increment the sequence number and counter variable to send the next packet
+            seq_num +=1
+            i+=1
+     # Return the final sequence number after all packets have been sent
+    return seq_num
+
+#This method implemenst the Stop and wait for server and it takes three arguments. The method listens to socket for incomming message from the client
+#It waits until a message is received and send acknowledgement message back back to client.
+def serverSaw(serverSocket, seqNum, recievedData):
+    while True:
+        message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
+        header_from_msg = message[:12] #Getting the header e
+        seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
+
+        if(flags == 0):   #if the flags is zero, this is a new packet
+            sendAck(seq, serverSocket, clientSocket)  #Send the ack message, which has ack equal to the seq of the package recieved.
+            if(seq == seqNum): #Did we recieve the correct package? If so, append it. This check is needed as duplicate packages may be sent.
+                seqNum += 1
+                recievedData.append(message[12:])   #save the data
+
+        elif(flags != 0 and recievedData): #Does the packet we recieved have a finish flag
+            syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
+            finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
+            if finish:
+            #Her må vi liste ut alt dataen vi har fått inn ...!
+                return recievedData
 
 # Define the goBackN function for the client-side
 def goBackN(clientSocket, serverConnection, seq_num):
@@ -267,22 +307,59 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection)
 
         # Receive ACKs for the packets sent
-        while k <= args.windowSize: #(Hopefully) Recieving n acks
+        while k < args.windowSize: #(Hopefully) Recieving n acks
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
-                if acknum < seq_num or acknum in ackList:
-                    ackList.append(acknum)
-                    #Cause i to not increase for this itteration
-                else:
+                if acknum >= seq_num and acknum not in ackList:
                     ackList.append(acknum)
                     k += 1
-            except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
+            except timeout: #If there's a timeout we leave the loop.
+                print("Whhops, timeout :()")
                 break
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
             seq_num += args.windowSize
             i += args.windowSize
     # Return the final sequence number after all packets have been sent
     return seq_num
+
+#This a method for a server that use Go-Back-N to recived data from client.
+#It takes in three parameters:serverSocket,Seqnum and recivedData.
+#Then checks if the packes is received in the right order
+def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
+    bufferData = []  #create an empty list
+    checkSeqNum = seqNum
+    ackNum = seqNum
+    while True:
+        message, clientAddress = serverSocket.recvfrom(1472)  #Receive a message and client address
+        header_from_msg = message[:12]   #get the header from the recieved packet
+        seq, acknum, flags, win = header.parse_header(header_from_msg)
+        syn, ack, fin = header.parse_flags(flags) #Getting information for the header
+
+        if(flags == 0):  #if flags = 0
+            if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData
+                bufferData.append(message[12:])
+                checkSeqNum += 1     #increase the checkSeqNum
+                if len(bufferData) == args.windowSize: #If all data from the current window has been added
+                    recivedData.extend(bufferData) #Add all data to the storage
+                    bufferData.clear() #Clear the buffer to make space for new data
+                    seqNum += args.windowSize
+                    checkSeqNum = seqNum
+                    for i in range(args.windowSize): #Sending the amount of packet acks to the client
+                        sendAck(ackNum, serverSocket, clientAddress)
+                        ackNum+=1
+            elif(seq < checkSeqNum):   #if the sequence number is less than expected value, we know there was a ackloss to client
+                #retransmitting all acks to client
+                ackNum = seq
+                sendAck(ackNum, serverSocket, clientAddress)
+                ackNum+=1
+            else: # if the sequence number is greater than expected value, clear the bufferdata.
+                checkSeqNum = seqNum
+                bufferData.clear()
+        else: #If the message is a FIN message
+            finish = CheckForFinish(fin, seq, serverSocket, clientAddress)
+            if finish:
+                return recivedData #Return the receive data
+
 
 # Define the selective repeat function for the client-side:
 def selectiveRepeat(clientSocket, serverConnection, seq_num):
@@ -336,6 +413,25 @@ def serverSR(serverSocket, seqNum, recivedData):
             finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
             if finish:
                 return recivedData
+            
+#This method creates a server and watis for a connection form client
+#Once the connections is established, it uses reliability function to recevie and extrac the file data sent by the client.
+#It then extracts the file data and stores it in a the server
+def createServer():
+    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) #Creates a socket
+    serverSocket.bind((args.bind, args.port)) #bind the socekt to a specific IP address and port number
+    print('The server is ready to receive')   #print a messeage to indicate that the server is ready to receive data
+
+    seqNum = (int) (handshakeServer(serverSocket)) #Getting the seqNum from the handshake
+    recievedData = [] #Creates and empty lis to store the received data. All 3 methods use this array
+
+    if(args.reliability == "SAW"):  #if SAW is passed in
+        recievedData = serverSaw(serverSocket, seqNum, recievedData) #calles the method serverSaw and store the data in receviedData
+    elif(args.reliability == "GBN"): #if GBN is passed in
+        recievedData = serverGBN(serverSocket, seqNum, recievedData)  #calles the method serverGBN and store the data in receviedData
+    else: #Else = SR method
+        recievedData = serverSR(serverSocket, seqNum, recievedData)  #calles the method serverSR and store the data in receviedData
+    UnpackFile(recievedData, args.newFile)  #Unpakc the file
 
 #This method takes in the filename specified by the user in the parameter. It chops the file into chunkcs/packets of 1460 bytes and add them into an array. The array is returned to the clients sending method
 def PackFile(fileForTransfer): #This function packs the file we want to transfer into packets of size 1460 bytes, and returns a list with the data packed.
@@ -356,44 +452,6 @@ def UnpackFile(fileToBeUnpacked,outputFileName):
         for data in fileToBeUnpacked:
             outputFile.write(data)
 
-#This method creates a server and watis for a connection form client
-#Once the connections is established, it uses reliability function to recevie and extrac the file data sent by the client.
-#It then extracts the file data and stores it in a the server
-def createServer():
-    serverSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) #Creates a socket
-    serverSocket.bind((args.bind, args.port)) #bind the socekt to a specific IP address and port number
-    print('The server is ready to receive')   #print a messeage to indicate that the server is ready to receive data
-
-    seqNum = (int) (handshakeServer(serverSocket)) #Getting the seqNum from the handshake
-    recievedData = [] #Creates and empty lis to store the received data. All 3 methods use this array
-
-    if(args.reliability == "SAW"):  #if SAW is passed in
-        recievedData = serverSaw(serverSocket, seqNum, recievedData) #calles the method serverSaw and store the data in receviedData
-    elif(args.reliability == "GBN"): #if GBN is passed in
-        recievedData = serverGBN(serverSocket, seqNum, recievedData)  #calles the method serverGBN and store the data in receviedData
-    else: #Else = SR method
-        recievedData = serverSR(serverSocket, seqNum, recievedData)  #calles the method serverSR and store the data in receviedData
-    UnpackFile(recievedData, args.newFile)  #Unpakc the file
-
-#This method implemenst the Stop and wait for server and it takes three arguments. The method listens to socket for incomming message from the client
-#It waits until a message is received and send acknowledgement message back back to client.
-def serverSaw(serverSocket, seqNum, recievedData):
-    while True:
-        message, clientSocket = serverSocket.recvfrom(1472) #Recieving message
-        header_from_msg = message[:12] #Getting the header e
-        seq, acknum, flags, win = header.parse_header(header_from_msg) #Getting information from header
-        if(flags == 0):   #if the flags is zero, this is a new packet
-            sendAck(seq, serverSocket, clientSocket)  #Send the ack message, which has ack equal to the seq of the package recieved.
-            if(seq == seqNum+1): #Did we recieve the correct package? If so, append it. This check is needed as duplicate packages may be sent.
-                seqNum += 1
-                recievedData.append(message[12:])   #save the data
-        elif(flags != 0 and recievedData): # Remove this when the rest of the code works :) We need a fin function!!!
-            syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
-            finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
-            if finish:
-            #Her må vi liste ut alt dataen vi har fått inn ...!
-                return recievedData
-
 #This methos sends an acknowledment (ack) packet to client with given ack number
 #The method also implements skipakc flag that randomly skips sending acks.
 def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a function to send acks to client. Function will randomly skip sending acks if the -t skipack flag is used
@@ -407,44 +465,6 @@ def sendAck(acknowledgment_number, serverSocket, clientSocket): #Creating a func
     else:
         serverSocket.sendto(msg, clientSocket)#if the flag is not set the ACK is sent to the client.
 
-#This a method for a server that use Go-Back-N to recived data from client.
-#It takes in three parameters:serverSocket,Seqnum and recivedData.
-#Then checks if the packes is received in the right order
-def serverGBN(serverSocket, seqNum, recivedData): #Server go back N method
-    bufferData = []  #create an empty list
-    checkSeqNum = seqNum
-    ackNum = seqNum
-    while True:
-        message, clientAddress = serverSocket.recvfrom(1472)  #Receive a message and client address
-        header_from_msg = message[:12]   #get the header from th
-        seq, acknum, flags, win = header.parse_header(header_from_msg)
-        syn, ack, fin = header.parse_flags(flags) #Getting information for the header
-
-        if(flags == 0):  #if flags = 0
-            if checkSeqNum == seq:  #if the number recived is the right one? If yes, append to bufferData
-                bufferData.append(message[12:])
-                checkSeqNum += 1     #increase the checkSeqNum
-                if(len(bufferData) == args.windowSize): #If all data from the current window has been added
-                    for i in bufferData:
-                        recivedData.append(i) #Add all data to the storage
-                    bufferData.clear() #Clear the buffer to make space for new data
-                    seqNum += args.windowSize
-                    checkSeqNum = seqNum
-                    for i in range(args.windowSize): #Sending the amount of packet acks to the client
-                        sendAck(ackNum, serverSocket, clientAddress)
-                        ackNum+=1
-            elif(seq < checkSeqNum):   #if the sequence number is less than expected value, we know there was a ackloss to client
-                #retransmitting all acks to client
-                ackNum = seq
-                sendAck(ackNum, serverSocket, clientAddress)
-                ackNum+=1
-            else: # if the sequence number is greater than expected value, clear the bufferdata.
-                checkSeqNum = seqNum
-                bufferData.clear()
-        else: #If the message is a FIN message
-            finish = CheckForFinish(fin, seq, serverSocket, clientAddress)
-            if finish:
-                return recivedData #Return the receive data
 
 #This method checks for the fin flag in the header of the message.
 #If the fin=2 flag is received then it sends an ack and closes finishes.
@@ -499,14 +519,14 @@ if args.client == True or args.server == True:
         sys.exit()
     else:
         if(args.client == True):
+            if args.testcase == "skipack":
+                print("Skipack is defined at the serverside, please retry with the loss option to skip sending a packet")
+                sys.exit()
             if(args.file):
                 PackedFile = PackFile(args.file) #Packing the file we are going to send in sizes of 1460 bytes.
                 createClient()
             else:
                 print("When you create a client, you also need to define which file to transfer to the server")
-                sys.exit()
-            if args.testcase == "skipack":
-                print("Skipack is defined at the serverside, please retry with another opinion")
                 sys.exit()
         if(args.server == True):
             if args.testcase == "loss":
