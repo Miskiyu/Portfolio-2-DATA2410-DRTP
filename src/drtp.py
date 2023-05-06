@@ -255,8 +255,10 @@ def specialSum(sumSize): #Sums the last n numbers of a function, but skips any n
 def goBackN(clientSocket, serverConnection, seq_num):
     i = 0 #initialise a counter variable
     ackList = [] # Initialize an empty list to store acknowledgment numbers
+
     while i < len(PackedFile): #Sending the packets within this loop. If not divisable by n, we send the remaining n packets as empty packets.
         ackList = []
+        k=0 # the variable k is needed to deal with 
         for j in range(args.windowSize): #sending the packets
             if j + i >= len(PackedFile): #If the packets are not divisable by n, we send empty packets so that the total adds up to n
                 sendingPacket(seq_num + j, b'0' * 0, clientSocket,serverConnection)
@@ -265,9 +267,15 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 sendingPacket(seq_num + j, PackedFile[j + i], clientSocket,serverConnection)
 
         # Receive ACKs for the packets sent
-        for j in range(args.windowSize): #(Hopefully) Recieving n acks
+        while k <= args.windowSize: #(Hopefully) Recieving n acks
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
+                if acknum < seq_num or acknum in ackList:
+                    ackList.append(acknum)
+                    #Cause i to not increase for this itteration
+                else:
+                    ackList.append(acknum)
+                    k += 1
             except timeout: #If something wrong happens (for example: not recieving an ack within the time limit), we break out of the for loop
                 break
         if ackList == list(range(seq_num, seq_num + args.windowSize)): #If the acks recieved are correct and in correct sequence, we can send the next 5 packets.
@@ -458,7 +466,7 @@ def createClient():
     #Creating a udp socket for the client
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     if args.timeout == "dyn":
-        clientSocket.settimeout(0.5) #Default timeout for dyn is 0.5, which is later changed
+        clientSocket.settimeout(0.5) #Default timeout for dyn is 0.5, which is changed dynamically as the code runs.
     else:
         clientSocket.settimeout(args.timeout)
     print("Client is created")
