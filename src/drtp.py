@@ -1,5 +1,3 @@
-#TODO: Make sure all methods are typed correctly.
-
 from socket import timeout
 import header
 import argparse
@@ -198,6 +196,8 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     print("\t".join(output)) #Printing the needed output for the
     print("")
     print("Closing socket")
+
+    print(allTimeouts)
     clientSocket.close()
 
 #This method sends packet to server
@@ -251,16 +251,18 @@ def specialSum(sumSize): #Sums the last n numbers of a function, but skips any n
     counter = len(perPacketRoundTripTime) -1
     i = 0
     sum = 0
+    sumDividend = 0
     while i < sumSize and counter >= 0:
         if perPacketRoundTripTime[counter][1] > 10000: #This makes sure we skip any values that contain only the time when the seq was sent, but the ack_recieved time was not subtracted. This will for instance happen if the ack is lost.
             counter -= 1
         else:
             sum += perPacketRoundTripTime[counter][1]
+            sumDividend += 1
             if perPacketRoundTripTime[counter][1] < 0.1: #TODO: these lines are just for bigfixes, remove
                 print(perPacketRoundTripTime[counter][1])
             counter -= 1
             i += 1
-    return sum/sumSize
+    return sum/sumDividend
 
 # Define the stop_and_wait function for the client-side
 def stop_and_wait(clientSocket, serverConnection, seq_num):
