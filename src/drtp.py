@@ -220,32 +220,43 @@ def sendPacket(seq, data, clientSocket, serverConnection):
 
 #This method recive packet from client, then it calculate the RTT for the packet
 def getAck(clientSocket, serverConnection):
+
+    if args.reliability == "SAW" and args.serverip != socket.gethostbyname(socket.gethostname()):
+        #Checks for and discards duplicate packages (as they are recieved instantaniously) for the SAW method. 
+        #The second check is needed as packets are recieved almost instantainously when running the code on a local computer, as we still want the code to be able to run at one.
+        defaultTimeout = clientSocket.gettimeout()
+        clientSocket.settimeout(0.01)
+        while True:
+            try:
+                message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from client
+            except:
+                clientSocket.settimeout(defaultTimeout)
+                break
    
-    while True:
-        message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from client
-        header_from_msg = message[:12] #Extracting header from message
-        seq, ack, flags, win = header.parse_header (header_from_msg) #Getting information from the header
-        if args.timeout == "dyn": #If the timeout is dynamic
-            global perPacketRoundTripTime #tell the functions to use the gloabal array
-            i = len(perPacketRoundTripTime) -1
-            while i >= 0:
-                if ack == perPacketRoundTripTime[i][0]:
-                    rtt = time.time()-perPacketRoundTripTime[i][1]
-                    perPacketRoundTripTime[i][1] = rtt
-                    break
-                i -= 1
-            if args.reliability != "GBN": #if SR or SAW is used as method
-                global allTimeouts #Using a variable to store the average timeout for the input
-                if len(perPacketRoundTripTime) > 20: #if more than 15 packets have been sent
-                    average = specialSum(10) #calculate the average the last 10 packets
-                    clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
-                    allTimeouts.append(average*4 if average != 0 else 0.2)
-            else: #if GBN is used at method
-                if len(perPacketRoundTripTime) > args.windowSize*3: #if more than windowsize*3 packet have been sent
-                    average = specialSum(3*args.windowSize) #calculate the average of the last 3*windowsize packets
-                    clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
-                    allTimeouts.append(average*4 if average != 0 else 0.2)
-        return ack  #return acknum
+    message, serverConnection =  clientSocket.recvfrom(1472) #Listening for message from client
+    header_from_msg = message[:12] #Extracting header from message
+    seq, ack, flags, win = header.parse_header (header_from_msg) #Getting information from the header
+    if args.timeout == "dyn": #If the timeout is dynamic
+        global perPacketRoundTripTime #tell the functions to use the gloabal array
+        i = len(perPacketRoundTripTime) -1
+        while i >= 0:
+            if ack == perPacketRoundTripTime[i][0]:
+                rtt = time.time()-perPacketRoundTripTime[i][1]
+                perPacketRoundTripTime[i][1] = rtt
+                break
+            i -= 1
+        if args.reliability != "GBN": #if SR or SAW is used as method
+            global allTimeouts #Using a variable to store the average timeout for the input
+            if len(perPacketRoundTripTime) > 20: #if more than 15 packets have been sent
+                average = specialSum(10) #calculate the average the last 10 packets
+                clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
+                allTimeouts.append(average*4 if average != 0 else 0.2)
+        else: #if GBN is used at method
+            if len(perPacketRoundTripTime) > args.windowSize*3: #if more than windowsize*3 packet have been sent
+                average = specialSum(3*args.windowSize) #calculate the average of the last 3*windowsize packets
+                clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach (approximated to) 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
+                allTimeouts.append(average*4 if average != 0 else 0.2)
+    return ack  #return acknum
 
 def specialSum(sumSize): #Sums the last n numbers of a function, but skips any numbers larger than 100.
     global perPacketRoundTripTime #tell the functions to use the gloabal array
@@ -306,7 +317,6 @@ def serverSaw(serverSocket, seqNum, recievedData):
             syn, ack, fin = header.parse_flags(flags) #We need to extract the fin flag
             finish = CheckForFinish(fin, seq, serverSocket, clientSocket)
             if finish:
-            #Her må vi liste ut alt dataen vi har fått inn ...!
                 return recievedData
 
 # Define the goBackN function for the client-side
