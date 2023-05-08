@@ -412,6 +412,7 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 if acknum in toBeRetransmitted:  #Need this check for the code to work when using dynamic RTTs for packets
+                    print(acknum)
                     toBeRetransmitted.remove(acknum)
             except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resend all packets that have not recieved an ack.
                 for k in toBeRetransmitted: #Looping though all packets needing to be retransmitted
