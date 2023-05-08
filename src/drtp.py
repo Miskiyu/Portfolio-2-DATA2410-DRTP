@@ -137,24 +137,27 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     t_end = time.time() - t0
 
     #Going into Finish-mode:
+    # Initialize data, acknowledgment_number, and flags for the FIN message
+    data = b'0' * 0
+    acknowledgment_number = 0
+    flags = 2
+    # Create the FIN message packet
     while True:
-         # Initialize data, acknowledgment_number, and flags for the FIN message
-        data = b'0' * 0
-        acknowledgment_number = 0
-        flags = 2
-         # Create the FIN message packet
-        msg = header.create_packet(seqNum, acknowledgment_number, flags, window, data)
-        #Encoding packet and sending it to server ip and port
-        clientSocket.sendto(msg, serverConnection)
-         # Receive a response from the server
-        modifiedMessage, serverConnection = clientSocket.recvfrom(12)
-        # Extract the first 12 bytes of the received message
-        data_from_msg = modifiedMessage[:12]
-         # Parse the header of the received message
-        seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
-        # Parse the flags from the received message
-        syn, ack, fin = header.parse_flags(flags)
-         # Check if the received message is a FIN-ACK message
+        try:
+            msg = header.create_packet(seqNum, acknowledgment_number, flags, window, data)
+            #Encoding packet and sending it to server ip and port
+            clientSocket.sendto(msg, serverConnection)
+            # Receive a response from the server
+            modifiedMessage, serverConnection = clientSocket.recvfrom(12)
+            # Extract the first 12 bytes of the received message
+            data_from_msg = modifiedMessage[:12]
+            # Parse the header of the received message
+            seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+            # Parse the flags from the received message
+            syn, ack, fin = header.parse_flags(flags)
+            # Check if the received message is a FIN-ACK message
+        except:
+            continue
         if(fin == 2 and ack == 4):
             print("We are done at client side, finishing")
             break
@@ -197,7 +200,6 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     print("")
     print("Closing socket")
 
-    print(allTimeouts)
     clientSocket.close()
 
 #This method sends packet to server
@@ -229,13 +231,12 @@ def getAck(clientSocket, serverConnection):
             while i >= 0:
                 if ack == perPacketRoundTripTime[i][0]:
                     rtt = time.time()-perPacketRoundTripTime[i][1]
-                    if rtt > 0.025:
-                        perPacketRoundTripTime[i][1] = rtt
+                    perPacketRoundTripTime[i][1] = rtt
                     break
                 i -= 1
             if args.reliability != "GBN": #if SR or SAW is used as method
                 global allTimeouts #Using a variable to store the average timeout for the input
-                if len(perPacketRoundTripTime) > 15: #if more than 15 packets have been sent
+                if len(perPacketRoundTripTime) > 20: #if more than 15 packets have been sent
                     average = specialSum(10) #calculate the average the last 10 packets
                     clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
                     allTimeouts.append(average*4 if average != 0 else 0.2)
@@ -504,8 +505,18 @@ def CheckForFinish(fin, ackNum ,serverSocket,clientSocket):
         seq = 0
         msg = header.create_packet(seq, acknowledgment_number, flags, window, data)
         serverSocket.sendto(msg, clientSocket) #Sending ack on the finish
+        serverSocket.settimeout(1) #Adding a small loop in case finish message gets lost and needs to be retransmitted. Adding a server timeout of one second.
+        while True: 
+            try:
+                message, clientSocket = serverSocket.recvfrom(1472) #Recieving the message
+                header_from_msg = message[:12]
+                seq, acknum, flags, win = header.parse_header(header_from_msg)
+                syn, ack, fin = header.parse_flags(flags) #Getting information from the header
+                if(fin == 2):
+                    serverSocket.sendto(msg, clientSocket) #Sending ack on the finish
+            except:
+                break
         return True # indicate finish
-    return False    #  if the FIN siganl is not recieved, return false, so the communication is not finished
 
 #This method takes in arguments passed in by the user. The defined IP to the serverm the serverport, which reliability method and what file the user wants to transfer.
 def createClient():
