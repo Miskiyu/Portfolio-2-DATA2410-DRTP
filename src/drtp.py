@@ -191,8 +191,8 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     else:
         throughput ="{:<8}".format("Error")
         print("") #Adding a line before and after the table to make it easier to read.
-        print("TIME TOO LOW TO CALCULATE BANDWIDTH, SEND A BIGGER PACKAGE")
-    headline = ["{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<12}".format("Avg. Timeout"),"{:<11}".format("time"), "{:<10}".format("Transfer"), "{:<8}".format("Bandwidth"), "packets_retransmitted"]
+        print("TIME TOO LOW TO CALCULATE THROUGHPUT, SEND A BIGGER PACKAGE")
+    headline = ["{:<8}".format("Method"), "{:<8}".format("Windowsize"), "{:<12}".format("Avg. Timeout"),"{:<11}".format("time"), "{:<10}".format("Transfer"), "{:<8}".format("Throughput"), "packets_retransmitted"]
     output = [reliability            ,              windowSize     , averageTimeoutWithUnits        , total_time            , transfer                   ,throughput, str(packets_retransmitted)] #Formatting the output
 
     print("\t".join(headline)) #Printing the header for the output
@@ -270,8 +270,6 @@ def specialSum(sumSize): #Sums the last n numbers of a function, but skips any n
         else:
             sum += perPacketRoundTripTime[counter][1]
             sumDividend += 1
-            if perPacketRoundTripTime[counter][1] < 0.1: #TODO: these lines are just for bigfixes, remove
-                print(perPacketRoundTripTime[counter][1])
             counter -= 1
             i += 1
     return sum/sumDividend
@@ -412,7 +410,6 @@ def selectiveRepeat(clientSocket, serverConnection, seq_num):
             try:
                 acknum = getAck(clientSocket, serverConnection) #Getting the packet from the server with the getAck function
                 if acknum in toBeRetransmitted:  #Need this check for the code to work when using dynamic RTTs for packets
-                    print(acknum)
                     toBeRetransmitted.remove(acknum)
             except timeout: #If we do not get all acks within the socket timeout, we enter this loop, where we resend all packets that have not recieved an ack.
                 for k in toBeRetransmitted: #Looping though all packets needing to be retransmitted
