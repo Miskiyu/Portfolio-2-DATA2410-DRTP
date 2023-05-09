@@ -203,12 +203,12 @@ def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
     clientSocket.close()
 
 #This method sends packet to server
-# Will not send the 10.th packet
+# Will not send the 10.th packet if the testcase is set to loss.
 def sendPacket(seq, data, clientSocket, serverConnection):
 
     flags = 0 #sets flags variable to 0
     packet = header.create_packet(seq, 0, flags, window, data)  #calls the create_packet methon to create a packet
-    if (args.testcase == "loss" and seq == 10):  #: Checks if the args.testcase flag is set to "loss" #TESTING WITH DUPLICATE INSTEAD OF LOSS
+    if (args.testcase == "loss" and seq == 10):  #: Checks if the args.testcase flag is set to "loss"
         print(f"Packet with sequenceNumber: {seq}, was lost")
         args.testcase = "loss_completed"
     else:
@@ -245,9 +245,9 @@ def getAck(clientSocket, serverConnection):
                 perPacketRoundTripTime[i][1] = rtt
                 break
             i -= 1
-        if args.reliability != "GBN": #if SR or SAW is used as method
+        if args.reliability == "SAW": #if SR or SAW is used as method
             global allTimeouts #Using a variable to store the average timeout for the input
-            if len(perPacketRoundTripTime) > 20: #if more than 15 packets have been sent
+            if len(perPacketRoundTripTime) > 20: #if more than 20 packets have been sent
                 average = specialSum(10) #calculate the average the last 10 packets
                 clientSocket.settimeout(average*4 if average != 0 else 0.2) #Average might reach 0 on a local computer comunicating with itself. In that case, we set average to 0.1.
                 allTimeouts.append(average*4 if average != 0 else 0.2)
@@ -342,10 +342,6 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 if acknum >= seq_num and acknum not in ackList: #Appending all uniqueue acks to the list
                     ackList.append(acknum)
                     k += 1
-                    
-                    # Break the loop when the difference between the highest received ACK and the lowest expected ACK is equal to the window size
-                    if len(ackList) == args.windowSize:
-                        break
             except timeout: #If there's a timeout we leave the loop.'
 
                 packets_retransmitted += args.windowSize #If there's a timeout, we retransmit all packages for the window.
