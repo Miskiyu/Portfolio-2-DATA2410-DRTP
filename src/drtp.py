@@ -23,7 +23,7 @@ def check_timeout(timeout):
         if timeout == "dyn":
             return timeout
         else: #If it's neither a float nor "dyn", raising an error.
-            raise argparse.ArgumentTypeError("Expected a float or dyn but you entered a " + str(type(timeout))) #Need to convert type(val) to string to append to the string.
+            raise argparse.ArgumentTypeError('Expected a float or "dyn" but you entered a ' + str(type(timeout))) #Need to convert type(val) to string to append to the string.
     socket.setdefaulttimeout(time) #Setting socket timeout for the client. It is 0.
     return time
 
@@ -31,7 +31,7 @@ def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from
     if not re.search(r"[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}", ip_address): #Check that the format is like this: "XXX.XXX.XXX.XXX", where X is a number between 0 and 9.
         raise Exception(f"The IP address {ip_address} is not valid. It needs to be in the format X.X.X.X, where each X is a number from 0 to 255.")
 
-    ip_split = ip_address.split(".") #Splits the IP-adress string based on the periods, and in the for loop checks that each byte is from 0 to 255.
+    ip_split = ip_address.split(".") #Splits the IP-adress string based on the periods, and in the for loop checks that each number is from 0 to 255.
 
     for ip_part in ip_split: #Checking that each number in the IP-adress is between 0 and 255.
        if int(ip_part) < 0 or int(ip_part) > 255:
@@ -39,8 +39,8 @@ def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from
     return ip_address
 
 #Function to validate the port number
-def check_port(port): #Code to check that the port is written is valid. Inspired from the starter code for portfolio 1.
-    # Try to convert tin input ta an  integer
+def check_port(port): #Code to check that the port is valid. Inspired from the starter code for portfolio 1.
+    # Try to convert the input to an  integer
     try:
         value = int(port)
     except ValueError:
@@ -56,7 +56,7 @@ def check_file(file):
         return file
     # If the file does not exist, print an error message and exit the program
     else:
-        print(f"The file {file} is not valid. Make sure you gave the correct path from the current dictionary")
+        print(f"The file {file} is not valid. Make sure you gave the correct path")
         sys.exit()
 
 #Handshake functions:
@@ -85,7 +85,7 @@ def handshakeServer(serverSocket):
      # Return the updated sequence number
     return seqNum
 
-def handshakeClient(clientSocket): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
+def handshakeClient(clientSocket, retry_limit): #Sends an empty package with a header containing the syn flag. Waits for a ack from the server with a timeout of 500 ms.
 
     # Initialize sequence and acknowledgment numbers, flags, and data for the SYN message
     sequence_number = 1
@@ -95,11 +95,19 @@ def handshakeClient(clientSocket): #Sends an empty package with a header contain
 
     msg = header.create_packet(sequence_number, acknowledgment_number, flags, window, data) # Create the SYN message packet
     clientSocket.sendto(msg, (args.serverip, args.port)) # Send the SYN message to the server
-    modifiedMessage, serverConnection = clientSocket.recvfrom(12) # Receive a response from the server
-    data_from_msg = modifiedMessage[:12]# Extract the first 12 bytes of the received message
-    seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
-    syn, ack, fin = header.parse_flags(flags) # Parse the flags from the received message
-
+    try:
+        modifiedMessage, serverConnection = clientSocket.recvfrom(12) # Receive a response from the server
+        data_from_msg = modifiedMessage[:12]# Extract the first 12 bytes of the received message
+        seq, acknum, flags, win = header.parse_header (data_from_msg) #it's an ack message with only the header
+        syn, ack, fin = header.parse_flags(flags) # Parse the flags from the received message
+    except timeout:
+        if retry_limit < 10:
+            print('Error: Did not receive SYN-ACK packet, restarting the handshake') # If the received message is not a SYN-ACK packet, print an error and exit
+            retry_limit += 1
+            handshakeClient(clientSocket, retry_limit)
+        else:
+            print("Handshake failed, exiting the program")
+            sys.exit()
     if syn and ack != 0 and acknum == 1: # Check if the received message is a SYN-ACK message
         print("The SYN-ACK from Server was recieved at Client")
          # Update sequence and acknowledgment numbers, and flags for the final ACK message
@@ -112,15 +120,17 @@ def handshakeClient(clientSocket): #Sends an empty package with a header contain
 
          # Send the final ACK message to the server
         clientSocket.sendto(msg, (args.serverip, args.port))
-        #Setter sequencenumber lik 2, for nå er handshake over, og datasendingen skal begynne med pakke 2
-        sequence_number = 2
+        sequence_number = 2 #sequence number is now 2, as the handshake is over
 
-          # Call the transmittAndListen function to start the data transmission
-        transmittAndListen(clientSocket, serverConnection, sequence_number)
+        transmittAndListen(clientSocket, serverConnection, sequence_number) #Call the transmittAndListen function to start the data transmission
     else:
-          # If the received message is not a SYN-ACK packet, print an error and exit
-        print('Error: Did not receive SYN-ACK packet')
-        sys.exit()
+        if retry_limit < 10:
+            print('Error: Did not receive SYN-ACK packet, restarting the handshake') # If the received message is not a SYN-ACK packet, print an error and exit
+            retry_limit += 1
+            handshakeClient(clientSocket, retry_limit)
+        else:
+            print("Handshake failed, exiting the program")
+            sys.exit()
 
 # Define the function to transmit data and listen for responses from the server
 def transmittAndListen(clientSocket, serverConnection, seqNum): #Client
@@ -276,8 +286,7 @@ def specialSum(sumSize): #Sums the last n numbers of a function, but skips any n
 
 # Define the stop_and_wait function for the client-side
 def stop_and_wait(clientSocket, serverConnection, seq_num):
-    global packets_retransmitted
-     # Initialize a counter variable
+    global packets_retransmitted # Initialize the variable to count the amounts of packets retransmitted
     i = 0
       # Continue sending packets while there are packets in the PackedFile list
     while i < len(PackedFile):
@@ -342,6 +351,8 @@ def goBackN(clientSocket, serverConnection, seq_num):
                 if acknum >= seq_num and acknum not in ackList: #Appending all uniqueue acks to the list
                     ackList.append(acknum)
                     k += 1
+                if len(ackList) == args.windowSize:
+                    break
             except timeout: #If there's a timeout we leave the loop.'
 
                 packets_retransmitted += args.windowSize #If there's a timeout, we retransmit all packages for the window.
@@ -532,7 +543,7 @@ def createClient():
         clientSocket.settimeout(args.timeout)
     print("Client is created")
     #Calling the hanshake method to start transmission with server
-    handshakeClient(clientSocket)
+    handshakeClient(clientSocket, 0) #The second variable is used to track the amount of times we've tried to do the handshake protocol. If it fails more than 10 times, we exit the program.
 
 #Defining the argumentParser
 parser = argparse.ArgumentParser(description='The arguments used when calling the program')
