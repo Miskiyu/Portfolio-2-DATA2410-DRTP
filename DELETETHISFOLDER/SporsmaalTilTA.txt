@@ -1,2 +1,0 @@
-Flags! FLAAGS
-Er det et flag som heter -m -> mode?

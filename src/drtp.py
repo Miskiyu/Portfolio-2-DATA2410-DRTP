@@ -24,7 +24,7 @@ def check_timeout(timeout):
             return timeout
         else: #If it's neither a float nor "dyn", raising an error.
             raise argparse.ArgumentTypeError('Expected a float or "dyn" but you entered a ' + str(type(timeout))) #Need to convert type(val) to string to append to the string.
-    socket.setdefaulttimeout(time) #Setting socket timeout for the client. It is 0.
+    socket.setdefaulttimeout(time) #Setting socket timeout for the client.
     return time
 
 def check_IP(ip_address): #Code to check that the ip adress is valid. Taken from https://www.abstractapi.com/guides/python-regex-ip-address. Comments added by us.
